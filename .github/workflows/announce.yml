@@ -1,0 +1,61 @@
+name: Announce to Discord
+
+# Once a day (15:00 UTC), post the NEWEST release published since the last run to the Discord #releases webhook.
+# No matter how many versions are pushed in a day, Discord gets at most one post. Needs the repository secret
+# DISCORD_WEBHOOK_URL; without it this does nothing.
+on:
+  schedule:
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Announce the latest release now, ignoring the daily window"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pick the release to announce
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          end=$(date -u +%Y-%m-%dT15:00:00Z)
+          start=$(date -u -d "$end - 1 day" +%Y-%m-%dT%H:%M:%SZ)
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ "$now" \< "$end" ]; then end=$start; start=$(date -u -d "$end - 1 day" +%Y-%m-%dT%H:%M:%SZ); fi
+          gh api "repos/${{ github.repository }}/releases?per_page=30" > releases.json
+          if [ "$FORCE" = "true" ]; then
+            jq -c '[.[] | select(.draft|not)] | sort_by(.published_at) | last // empty' releases.json > pick.json
+          else
+            jq -c --arg s "$start" --arg e "$end" \
+              '[.[] | select((.draft|not) and .published_at >= $s and .published_at < $e)] | sort_by(.published_at) | last // empty' \
+              releases.json > pick.json
+          fi
+          if [ -s pick.json ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Announcing $(jq -r .tag_name pick.json)"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No new release between $start and $end."
+          fi
+      - name: Post to Discord
+        if: steps.pick.outputs.found == 'true'
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then echo "DISCORD_WEBHOOK_URL is not set; nothing posted."; exit 0; fi
+          tag=$(jq -r .tag_name pick.json)
+          url=$(jq -r .html_url pick.json)
+          zip=$(jq -r '.assets[0].browser_download_url // empty' pick.json)
+          msg="**cro/x ${tag} alpha 2 is out**"$'\n'"Release notes and download: ${url}"
+          [ -n "$zip" ] && msg="${msg}"$'\n'"Direct zip: ${zip}"
+          msg="${msg}"$'\n'"Install: close the game, delete the old CROX folder, unzip so the path is Interface\\AddOns\\CROX\\CROX.toc."$'\n'"Found a problem? In game type /x bug and paste the report in the bug channel."
+          jq -n --arg c "$msg" '{content: $c, allowed_mentions: {parse: []}}' > body.json
+          curl -sS -f -H "Content-Type: application/json" -d @body.json "$WEBHOOK"
