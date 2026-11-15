@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in cro/x broke, felt wrong, or stayed quiet when it shouldn't have.
+title: "[bug] "
+labels: ["bug", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing cro/x. The fastest way to report: in game, type **/x bug**, copy the report it builds, and paste it into the box below. It already holds your version, game build and the last fight (other players' names are replaced by their class).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What happened?
+      options:
+        - Something went wrong (an error)
+        - A line was awkward or wrong
+        - It stayed quiet when it shouldn't
+        - It spoke too much
+        - The window looks or acts wrong
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Paste the /x bug report here
+      description: In game, type /x bug, then Select all, copy, and paste.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Anything else?
+      description: What you were doing, what you expected, what you saw instead. A screenshot helps for window problems.
+  - type: input
+    id: build
+    attributes:
+      label: cro/x version
+      description: Shown at the top of the report, and in your chat at login.
+      placeholder: "0.55"

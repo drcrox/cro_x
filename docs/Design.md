@@ -186,6 +186,14 @@ Forever hides some values from addons; health and range checks may be among them
 
 Repeats: keep the first alpha's no-repeat memory, and larger pools.
 
+## Beta testing tools (built 2026-11-15, v0.55)
+Goal: make reporting a problem a ten-second job. Nothing is ever sent by the addon; the player copies text and pastes it themselves.
+- **/x bug** (also Options > Beta testing > Report a problem): a Blizzard-style window with a reason picker (error, awkward line, stayed quiet, spoke too much, window problem, other), a short note, and an "include my last fight" box (other players' names become their class). It builds a report under Discord's 2,000-character limit (cut at 1,900, most useful parts first: version, game build, reason, note, character, hook status, last error, recent quiet reasons, last fight's lines) and offers Select all.
+- **Error catcher:** listens for errors from cro/x only and passes every error on to the handler that was already there. A cro/x error prints one chat line, "hit a snag. Type /x bug to report it.", at most every five minutes; the error goes into the report. Errors inside the button hook are caught the same way.
+- **/x test** (also Options > Beta testing > Why was it quiet?): prints to your own chat only: on or off, whether the button hook works, your Chatty limits, how long since the last line, and the last few quiet presses in plain words ("the dice said not this time", "someone in your group had just spoken").
+- **In the repo:** a GitHub issue form (`.github/ISSUE_TEMPLATE/bug_report.yml`), `docs/beta/Discord thread template.md`, `docs/beta/Tester checklist.md` (copy per build), and `tools/read_reports.py` (turns pasted reports and exports into one audit summary: versions, what was reported, grouped errors, quiet reasons, flagged moments).
+- **Overage report (settled 2026-11-15):** cocky +9 and hot-headed +1 kept as written. Docs renamed to the cro_x form.
+
 ## Status (2026-11-15)
 - **Done:** archetype map; stock phrases for every archetype; warlock summons; After a kill; debuff callouts; consumables.
 - **Done since:** call and response; temperament even-out (calm, cheerful, hot-headed drafted by Claude from the Writing Profile, for the beta audit).  Overage report settled (2026-11-15): cocky +9 and hot-headed +1 are kept as written. Docs renamed to the cro_x form (a slash can't go in a doc name).

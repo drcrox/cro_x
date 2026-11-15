@@ -52,9 +52,20 @@ end
 
 function Log.said(e) add(e) end
 function Log.event(e) add(e) end
+-- the last few quiet presses, kept in memory only, for /x test and /x bug (even outside combat)
+local recentQuiet = {}
 function Log.quiet(ctx, moment, why)
+  recentQuiet[#recentQuiet + 1] = {at = ns.now(), moment = moment, ability = ctx and ctx.ability,
+    item = ctx and ctx.itemName, why = why}
+  while #recentQuiet > 8 do table.remove(recentQuiet, 1) end
   if not ns.inCombat then return end
   add({kind = "quiet", moment = moment, ability = ctx and ctx.ability, item = ctx and ctx.itemName, why = why})
+end
+
+function Log.recentQuiet(n)
+  local out = {}
+  for i = math.max(1, #recentQuiet - (n or 4) + 1), #recentQuiet do out[#out + 1] = recentQuiet[i] end
+  return out
 end
 
 ------------------------------------------------------------------------
@@ -289,6 +300,25 @@ function Log.exportText()
     end
   end
   return table.concat(out, "\n")
+end
+
+-- the last n things said in the newest fight, written like the export (other players become classes); quiet
+-- presses are left out unless asked for, since a report already lists the recent ones
+function Log.recentLines(n, withQuiet)
+  local sessions = ns.cdb and ns.cdb.log and ns.cdb.log.sessions or {}
+  local s = sessions[#sessions]
+  if not s then return {} end
+  local fg
+  for i = #s.fights, 1, -1 do if #s.fights[i].events > 0 then fg = s.fights[i] break end end
+  if not fg then return {} end
+  local lines = {}
+  for _, e in ipairs(fg.events) do
+    if e.text then lines[#lines + 1] = ("%s %s"):format(clock(e.t), Log.describe(e, true))
+    elseif withQuiet and e.kind == "quiet" then lines[#lines + 1] = ("%s quiet | %s | %s | %s"):format(clock(e.t), e.moment or "-", e.ability or e.item or "-", e.why or "-") end
+  end
+  local out = {}
+  for i = math.max(1, #lines - n + 1), #lines do out[#out + 1] = lines[i] end
+  return out
 end
 
 local exportFrame

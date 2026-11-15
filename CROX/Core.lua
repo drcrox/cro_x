@@ -7,7 +7,7 @@
 
 local ADDON, ns = ...
 ns = ns or {}
-local VERSION = "0.54"
+local VERSION = "0.55"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -560,6 +560,8 @@ local spokeTimes = {}
 local lastSpoke = -1000
 ns.CHATTY = CHATTY
 
+function ns.sinceSpoke() return now() - lastSpoke end
+
 local function linesInLastMinute(t)
   local n = 0
   for i = #spokeTimes, 1, -1 do
@@ -1090,7 +1092,10 @@ end)
 local hookOK = false
 if hooksecurefunc and UseAction then
   hookOK = pcall(hooksecurefunc, "UseAction", function(slot) local ok, err = pcall(onPress, slot)
-    if not ok and ns.debug then p("error: " .. tostring(err)) end end)
+    if not ok then
+      if ns.Bug then ns.Bug.capture(err) end
+      if ns.debug then p("error: " .. tostring(err)) end
+    end end)
 end
 ns.hookOK = function() return hookOK end
 

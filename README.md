@@ -13,6 +13,9 @@ Copy the `CROX` folder into `World of Warcraft/_classic_/Interface/AddOns/` (the
 ## Repository
 - `CROX/` — the add-on. `Lines.lua` and `Abilities.lua` are generated; edit the docs instead.
 - `docs/` — design, approved lines, tag pools and the archetype map.
-- `tools/` — the line generator (`gen_lines.py`) and the test harness (Lua 5.1 with stand-ins for the game's API).
+- `tools/` — the line generator (`gen_lines.py`), the test harness (Lua 5.1 with stand-ins for the game's API) and `read_reports.py`, which summarizes pasted bug reports.
+- `docs/beta/` — the Discord thread template and the per-build tester checklist.
+
+**Reporting a problem:** in game, type `/x bug`, copy the report, and paste it into the beta Discord or a new issue here.
 
 Status: alpha 2 (v0.54). Credits for every asset and source are in the add-on's Credits section.
