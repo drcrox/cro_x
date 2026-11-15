@@ -177,6 +177,18 @@ ns.showSplash(); check("splash opens", G.CROX2SplashFrame._shown)
 ns.openArtPicker(); check("art picker opens", G.CROX2ArtFrame._shown)
 lua.eval("function(f) return f._scripts.OnUpdate[1] end")(G.CROX2SplashFrame)(G.CROX2SplashFrame, 9)
 check("splash closes by itself", not G.CROX2SplashFrame._shown)
+r = lua.eval('''function(ns)
+  ns.showSplash()
+  local cb = CROX2SplashFrame and nil
+  return ns.cdb.splash end''')(ns)
+check("splash shows with the login checkbox on", r == True, r)
+r = lua.eval('''function(ns)
+  local f = CROX2SplashFrame
+  for _, c in ipairs(f._children or {}) do end
+  ns.cdb.splash = false ns.showSplash()
+  local v = ns.cdb.splash ns.cdb.splash = true
+  return v end''')(ns)
+check("splash re-open leaves the toggle alone", r == False, r)
 G.SlashCmdList.CROX("art")
 r = lua.eval('''function(ns)
   local f = CROX2ArtFrame

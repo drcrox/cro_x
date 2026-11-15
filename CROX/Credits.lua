@@ -7,12 +7,12 @@ CROX2_CREDITS = {
   {
     heading = "Art and fonts",
     items = {
-      {what = "Horde crest, window frames, buttons, icons and sounds", by = "Blizzard Entertainment",
+      {what = "Horde crest, battleground timer logo, window frames, buttons, icons and sounds", by = "Blizzard Entertainment",
         source = "World of Warcraft game client (loaded from the game, not shipped with cro/x)",
         license = "Used under Blizzard's terms for World of Warcraft add-ons", used = "Everywhere"},
       {what = "Alliance screen background (cropped from the World of Warcraft poster, 2005)", by = "Blizzard Entertainment",
         source = "Warcraft Wiki, Horde Poster image", url = "https://warcraft.wiki.gg/wiki/File:Horde_Poster.jpg",
-        license = "(c) 2005 Blizzard Entertainment. Shown as a fan tribute; will be removed on request", used = "Alliance screen"},
+        license = "(c) 2005 Blizzard Entertainment. Shown as a fan tribute; will be removed on request", used = "Alliance screen and Horde splash page"},
       {what = "Morpheus display font", by = "Blizzard Entertainment", source = "World of Warcraft game client",
         license = "Loaded from the game", used = "LOK'TAR OGAR, splash page title"},
     },

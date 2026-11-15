@@ -2,7 +2,7 @@
 ## Title: cro/x
 ## Notes: Combat Roleplay Options /x - your character speaks and emotes in combat, in their own voice. Horde only.
 ## Author: Crox
-## Version: 0.56
+## Version: 0.57
 ## SavedVariables: CROX2DB
 ## SavedVariablesPerCharacter: CROX2CharDB
 Lines.lua

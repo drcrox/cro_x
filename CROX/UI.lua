@@ -49,14 +49,10 @@ local function cap(s) return s and (s:sub(1, 1):upper() .. s:sub(2)) or "" end
 ------------------------------------------------------------------------
 -- Alliance screen
 ------------------------------------------------------------------------
-local function allianceArt(parent, withCheckbox)
-  local f = CreateFrame("Frame", nil, parent)
-  local bg = f:CreateTexture(nil, "BACKGROUND", nil, -2)
-  bg:SetAllPoints()
-  bg:SetColorTexture(0, 0, 0, 0.95)
-  -- Fixed Alliance background (Blizzard art, see Credits). Independent of the art picker.
-  -- The image sits in the top part of a 1024 square, so the texture coordinates cover only that part
-  -- and crop to the frame's shape without stretching.
+-- The fixed Blizzard-poster background used by the Alliance screen and the Horde splash (see Credits).
+-- It is not part of the art picker. The image sits in the top part of a 1024 square, so the texture
+-- coordinates cover only that part and crop to the frame's shape without stretching.
+local function posterBG(f)
   local poster = f:CreateTexture(nil, "BACKGROUND", nil, -1)
   poster:SetAllPoints()
   poster:SetTexture("Interface\\AddOns\\CROX\\Art\\AllianceBG")
@@ -70,22 +66,40 @@ local function allianceArt(parent, withCheckbox)
       local keep = IMG_ASPECT / frameAspect
       v0 = IMG_H * (1 - keep) / 2; v1 = IMG_H - v0
     else                                      -- frame is taller: trim left (keep the orc on the right)
-      local keep = frameAspect / IMG_ASPECT
-      u0 = 1 - keep
+      u0 = 1 - frameAspect / IMG_ASPECT
     end
     poster:SetTexCoord(u0, u1, v0, v1)
   end
   f:SetScript("OnSizeChanged", fit)
   fit()
+  return poster
+end
+
+local function allianceArt(parent, withCheckbox)
+  local f = CreateFrame("Frame", nil, parent)
+  local bg = f:CreateTexture(nil, "BACKGROUND", nil, -2)
+  bg:SetAllPoints()
+  bg:SetColorTexture(0, 0, 0, 0.95)
+  local poster = posterBG(f)
   local shade = f:CreateTexture(nil, "BACKGROUND", nil, 0)
-  shade:SetPoint("BOTTOMLEFT"); shade:SetPoint("BOTTOMRIGHT"); shade:SetHeight(110)
+  shade:SetPoint("BOTTOMLEFT"); shade:SetPoint("BOTTOMRIGHT"); shade:SetHeight(140)
   shade:SetColorTexture(0, 0, 0, 0.45)
+  -- the Horde battleground timer logo, locked in (not the crest the player picked for Horde screens)
+  local logo = f:CreateTexture(nil, "ARTWORK")
+  W.crest(logo, 2)
+  logo:SetSize(130, 130)
+  logo:SetPoint("TOP", 0, -14)
   local title = f:CreateFontString(nil, "OVERLAY")
   if not pcall(title.SetFont, title, "Fonts\\MORPHEUS.TTF", 46, "THICKOUTLINE") then title:SetFontObject("GameFontNormalHuge") end
   title:SetTextColor(0.85, 0.08, 0.05)
   title:SetText("LOK'TAR OGAR")
-  title:SetPoint("BOTTOM", 0, 52)
-  f.poster, f.title = poster, title
+  title:SetPoint("BOTTOM", 0, 78)
+  local sub = f:CreateFontString(nil, "OVERLAY")
+  if not pcall(sub.SetFont, sub, "Fonts\\MORPHEUS.TTF", 20, "OUTLINE") then sub:SetFontObject("GameFontNormalLarge") end
+  sub:SetTextColor(0.95, 0.9, 0.8)
+  sub:SetText("You have chosen your faction poorly.")
+  sub:SetPoint("TOP", title, "BOTTOM", 0, -4)
+  f.poster, f.logo, f.title, f.sub = poster, logo, title, sub
   if withCheckbox then
     local c = W.check(f, "Disable addon and reroll Horde", function(_, on)
       if on then
@@ -310,7 +324,7 @@ local function buildOptions(parent)
   check("splash", "Show the splash page at login", "A short welcome when you log in. It closes by itself after a few seconds.")
   local artBtn = W.button(s, "Choose art...", 130, function() ns.openArtPicker() end)
   artBtn:SetPoint("TOPLEFT", 12, y - 2)
-  W.tooltip(artBtn, "Choose art", "The Horde crest, the splash page background, the page behind setup and Credits, and the Character backdrop, all from the game's own art. Same as /x art.")
+  W.tooltip(artBtn, "Choose art", "The Horde crest, the page behind setup and Credits, and the Character backdrop, all from the game's own art. Same as /x art.")
   y = y - 32
   local slider = W.slider(s, "Text scale", 0.8, 1.4, 0.05, function() return cdb().textScale or 1 end,
     function(v) cdb().textScale = v if ns.relayout then ns.relayout() end end, function(v) return ("%d%%"):format(v * 100 + 0.5) end)
@@ -1149,7 +1163,6 @@ function CROX2_FlagBinding() if ns.Log then ns.Log.openReview() end end
 -- painted areas that follow the player's choices: {frame, key, holder, dim}
 local painted = {}
 local ART_KEYS = {
-  bg = {list = function() return W.BACKGROUNDS end, label = "Splash and Alliance screen background"},
   page = {list = function() return W.PAGES end, label = "Setup and Credits page"},
   charBg = {list = function() return {W.BACKGROUNDS[1], W.BACKGROUNDS[4]} end, label = "Character section backdrop"},
 }
@@ -1185,7 +1198,7 @@ function ns.openArtPicker()
     local f = W.panel("CROX2ArtFrame", "cro/x - art from the game", 600, 470)
     browserFrame = f
     local cat = "art"
-    local CATS = {{"art", "Horde crest"}, {"bg", ART_KEYS.bg.label}, {"page", ART_KEYS.page.label},
+    local CATS = {{"art", "Horde crest"}, {"page", ART_KEYS.page.label},
       {"charBg", ART_KEYS.charBg.label}}
     local hint = W.hint(f, "Click the one that looks best. Blank squares are art this game client doesn't have.")
     hint:SetPoint("TOPLEFT", 16, -62)
@@ -1272,7 +1285,13 @@ function ns.showSplash(onDone)
     local inner = CreateFrame("Frame", nil, splash)
     inner:SetPoint("TOPLEFT", 12, -12)
     inner:SetPoint("BOTTOMRIGHT", -12, 12)
-    ns.paintArea(inner, "bg", 0.55)
+    posterBG(inner)
+    local dim = inner:CreateTexture(nil, "BACKGROUND", nil, 0)
+    dim:SetAllPoints()
+    dim:SetColorTexture(0, 0, 0, 0.45)
+    local low = inner:CreateTexture(nil, "BACKGROUND", nil, 1)
+    low:SetPoint("BOTTOMLEFT"); low:SetPoint("BOTTOMRIGHT"); low:SetHeight(70)
+    low:SetColorTexture(0, 0, 0, 0.4)
     local crest = splash:CreateTexture(nil, "ARTWORK")
     crest:SetSize(150, 150)
     crest:SetPoint("TOP", 0, -18)
@@ -1291,9 +1310,13 @@ function ns.showSplash(onDone)
     local ver = W.hint(splash, ("v%s · alpha 2"):format(ns.VERSION))
     ver:SetPoint("BOTTOMLEFT", 18, 16)
     local close = W.button(splash, "Close", 80, function() splash:Hide() end)
-    close:SetPoint("BOTTOMRIGHT", -16, 14)
+    close:SetPoint("BOTTOMRIGHT", -16, 40)
     local open = W.button(splash, "Open cro/x", 110, function() splash:Hide() if ns.toggleMain then ns.toggleMain() end end)
     open:SetPoint("RIGHT", close, "LEFT", -6, 0)
+    -- yellow Blizzard checkbox, bottom right of the picture; unchecking stops the splash at login
+    local show = W.check(splash, "Show at login", function(_, on) cdb().splash = on and true or false end)
+    show:SetPoint("BOTTOMRIGHT", -100, 14)
+    splash.show = show
     splash:SetScript("OnUpdate", function(self, el)
       if self:IsMouseOver() then self.left = SPLASH_SECONDS return end
       self.left = (self.left or SPLASH_SECONDS) - (el or 0)
@@ -1311,6 +1334,7 @@ function ns.showSplash(onDone)
   for _, h in ipairs(ns.homelands()) do if h[1] == c.homeland then home = h[2] end end
   splash.who:SetText(c.setupDone and ("%s · %s · %s · %s · %s"):format(ns.profile.name or "", c.temperament or "",
     home or "no homeland", c.upbringing or "", c.drive or "") or (ns.profile.name or "") .. " - let's meet your character.")
+  splash.show:SetChecked(c.splash ~= false)
   splash.left = SPLASH_SECONDS
   splash.onDone = onDone
   splash:Show()

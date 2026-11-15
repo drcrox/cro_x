@@ -7,7 +7,7 @@
 
 local ADDON, ns = ...
 ns = ns or {}
-local VERSION = "0.56"
+local VERSION = "0.57"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
