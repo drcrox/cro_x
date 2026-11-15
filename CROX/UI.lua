@@ -999,6 +999,15 @@ function ns.toggleMain()
   if main:IsShown() then main:Hide() else main:Show() end
 end
 
+-- open the main window on one section (character, options, phrases, lines, credits)
+function ns.openSection(key)
+  if ns.isAlliance() then ns.showAlliance() return end
+  if not main then buildMain() end
+  main:Show()
+  selectTab(1)
+  if sections[key] then showSection(key) end
+end
+
 function ns.refreshUI()
   if main and main:IsShown() and current and sections[current] and sections[current].refresh then
     sections[current]:refresh()
@@ -1198,6 +1207,34 @@ end
 local splash
 local SPLASH_SECONDS = 12
 
+-- Shown once, right after setup is finished for the first time: look through the lines or add your own
+local nextStep
+local function showNextStep()
+  if not nextStep then
+    nextStep = W.panel("CROX2NextFrame", "cro/x - you're all set", 440, 210)
+    local page = CreateFrame("Frame", nil, nextStep)
+    page:SetPoint("TOPLEFT", 8, -26)
+    page:SetPoint("BOTTOMRIGHT", -8, 8)
+    ns.paintArea(page, "page", 0.55)
+    local t = W.text(nextStep, "Your character's choices are saved. Want to go into the addon now to pick which lines " ..
+      "they say, or add some of your own?", "GameFontHighlight")
+    t:SetPoint("TOPLEFT", 24, -44)
+    t:SetWidth(392)
+    t:SetWordWrap(true)
+    local h = W.hint(nextStep, "You can do either at any time: type /x, then Lines or My phrases.")
+    h:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -10)
+    h:SetWidth(392)
+    local browse = W.button(nextStep, "Choose lines", 120, function() nextStep:Hide() ns.openSection("lines") end)
+    browse:SetPoint("BOTTOMLEFT", 24, 22)
+    local mine = W.button(nextStep, "Add my own lines", 140, function() nextStep:Hide() ns.openSection("phrases") end)
+    mine:SetPoint("LEFT", browse, "RIGHT", 8, 0)
+    local later = W.button(nextStep, "Not now", 90, function() nextStep:Hide() end)
+    later:SetPoint("BOTTOMRIGHT", -24, 22)
+  end
+  nextStep:Show()
+end
+ns.showNextStep = showNextStep
+
 -- The splash is also the setup: the character's five choices are dropdowns here. The first time (setup not
 -- done yet) it stays open until the player is finished; after that it closes by itself unless it's in use.
 local SPLASH_HINTS = {
@@ -1265,7 +1302,7 @@ function ns.showSplash(onDone)
     ver:SetPoint("BOTTOMLEFT", 22, 20)
     local done = W.button(splash, "Done", 90, function() splash:Hide() end)
     done:SetPoint("BOTTOMRIGHT", -24, 46)
-    local open = W.button(splash, "Open cro/x", 110, function() splash:Hide() if ns.toggleMain then ns.toggleMain() end end)
+    local open = W.button(splash, "Open cro/x", 110, function() splash.opened = true splash:Hide() if ns.toggleMain then ns.toggleMain() end end)
     open:SetPoint("RIGHT", done, "LEFT", -6, 0)
     -- yellow Blizzard checkbox, bottom right of the picture; unchecking stops the splash at login
     local show = W.check(splash, "Show at login", function(_, on) cdb().splash = on and true or false end)
@@ -1295,7 +1332,9 @@ function ns.showSplash(onDone)
       if not cdb().setupDone then
         cdb().setupDone = true
         p("all set. Type /x any time to change things.")
+        if not self.opened then pcall(showNextStep) end
       end
+      self.opened = nil
       local cb = self.onDone
       self.onDone = nil
       if cb then cb() end

@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.7 · 2026-11-15
+- After the first setup is done, a small window offers "Choose lines", "Add my own lines" or "Not now". It appears once, not on later splashes.
+
 ## 0.57-alpha2.6 · 2026-11-15
 - Window header now reads "Combat Roleplay Options - cro/x"; the splash subtitle drops the trailing /x.
 

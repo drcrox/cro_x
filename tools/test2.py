@@ -243,3 +243,21 @@ r = lua.eval('''function(ns)
 end''')(ns)
 check("first run: splash stays open with all five dropdowns", r["stays"] and r["dd"])
 check("closing the splash finishes setup and keeps the choices", r["done"] and r["temp"])
+
+# --- after the first setup: choose lines or add your own
+r = lua.eval('''function(ns)
+  CROX2SplashFrame:Hide()
+  ns.cdb.setupDone = false
+  ns.showSplash()
+  CROX2SplashFrame:Hide()
+  local shown = CROX2NextFrame and CROX2NextFrame:IsShown()
+  ns.cdb.setupDone = true
+  CROX2NextFrame:Hide()
+  ns.showSplash() CROX2SplashFrame:Hide()
+  local again = CROX2NextFrame:IsShown()
+  ns.openSection("phrases")
+  return {shown = shown, again = again, main = CROX2MainFrame and CROX2MainFrame:IsShown()}
+end''')(ns)
+check("after first setup, the next-step choice appears", r["shown"])
+check("it does not appear on later splashes", not r["again"])
+check("openSection opens the main window", r["main"])
