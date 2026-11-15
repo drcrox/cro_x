@@ -54,19 +54,38 @@ local function allianceArt(parent, withCheckbox)
   local bg = f:CreateTexture(nil, "BACKGROUND", nil, -2)
   bg:SetAllPoints()
   bg:SetColorTexture(0, 0, 0, 0.95)
-  ns.paintArea(f, "bg", 0.6)
-  local crest = f:CreateTexture(nil, "ARTWORK")
-  W.crest(crest)
-  crest:SetVertexColor(0.6, 0.6, 0.6)
-  crest:SetAlpha(0.4)
-  crest:SetPoint("CENTER", 0, 10)
-  crest:SetSize(260, 260)
+  -- Fixed Alliance background (Blizzard art, see Credits). Independent of the art picker.
+  -- The image sits in the top part of a 1024 square, so the texture coordinates cover only that part
+  -- and crop to the frame's shape without stretching.
+  local poster = f:CreateTexture(nil, "BACKGROUND", nil, -1)
+  poster:SetAllPoints()
+  poster:SetTexture("Interface\\AddOns\\CROX\\Art\\AllianceBG")
+  local IMG_ASPECT, IMG_H = 1024 / 786, 786 / 1024
+  local function fit()
+    local w, h = f:GetWidth(), f:GetHeight()
+    if not w or not h or w < 1 or h < 1 then return end
+    local frameAspect = w / h
+    local u0, u1, v0, v1 = 0, 1, 0, IMG_H
+    if frameAspect > IMG_ASPECT then          -- frame is wider: trim top and bottom
+      local keep = IMG_ASPECT / frameAspect
+      v0 = IMG_H * (1 - keep) / 2; v1 = IMG_H - v0
+    else                                      -- frame is taller: trim left (keep the orc on the right)
+      local keep = frameAspect / IMG_ASPECT
+      u0 = 1 - keep
+    end
+    poster:SetTexCoord(u0, u1, v0, v1)
+  end
+  f:SetScript("OnSizeChanged", fit)
+  fit()
+  local shade = f:CreateTexture(nil, "BACKGROUND", nil, 0)
+  shade:SetPoint("BOTTOMLEFT"); shade:SetPoint("BOTTOMRIGHT"); shade:SetHeight(110)
+  shade:SetColorTexture(0, 0, 0, 0.45)
   local title = f:CreateFontString(nil, "OVERLAY")
   if not pcall(title.SetFont, title, "Fonts\\MORPHEUS.TTF", 46, "THICKOUTLINE") then title:SetFontObject("GameFontNormalHuge") end
   title:SetTextColor(0.85, 0.08, 0.05)
   title:SetText("LOK'TAR OGAR")
-  title:SetPoint("CENTER", 0, 10)
-  f.crest, f.title = crest, title
+  title:SetPoint("BOTTOM", 0, 52)
+  f.poster, f.title = poster, title
   if withCheckbox then
     local c = W.check(f, "Disable addon and reroll Horde", function(_, on)
       if on then
@@ -849,10 +868,6 @@ local function relayout()
     local h = s.layout and s:layout(cw) or 400
     s:SetHeight(h)
     scrollChild:SetHeight(h)
-  end
-  if alliancePage.art then
-    local size = math.min(bw, bh) * 0.7
-    alliancePage.art.crest:SetSize(size, size)
   end
 end
 ns.relayout = relayout
