@@ -1,6 +1,6 @@
 # cro/x — Combat Roleplay Options /x
 
-**Current build: cro_x v.57a2** · [Download the latest](../../releases/latest) · [Changelog](CHANGELOG.md)
+**Current build: cro_x 0.57-alpha2** · [Download the latest](../../releases/latest) · [Changelog](CHANGELOG.md)
 
 A World of Warcraft: Forever add-on for the Horde. Your character speaks and emotes in combat, in their own voice: shaped by temperament, homeland, upbringing, what drives them, class, spec and professions.
 
@@ -20,4 +20,4 @@ Copy the `CROX` folder into `World of Warcraft/_classic_/Interface/AddOns/` (the
 
 **Reporting a problem:** in game, type `/x bug`, copy the report, and paste it into the beta Discord or a new issue here.
 
-Status: alpha 2 (v0.54). Credits for every asset and source are in the add-on's Credits section.
+Status: alpha 2. Credits for every asset and source are in the add-on's Credits section.

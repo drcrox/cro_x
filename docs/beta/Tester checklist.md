@@ -2,9 +2,9 @@
 
 Copy this into a pinned message for each new build and change the version. Testers reply with what they could and couldn't do.
 
-**Build: v0.56**
+**Build: 0.57-alpha2**
 
-Install: close the game, delete the old `Interface\AddOns\CROX` folder, unzip so the path is `Interface\AddOns\CROX\CROX.toc`, then log in. The login line should say `v0.55 alpha 2 loaded`.
+Install: close the game, delete the old `Interface\AddOns\CROX` folder, unzip so the path is `Interface\AddOns\CROX\CROX.toc`, then log in. The login line should say `cro_x 0.57-alpha2 loaded`.
 
 ## Quick pass (10 minutes)
 
