@@ -35,12 +35,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ steps.ver.outputs.version }}"
+          label="v.${v#*.}a2"
           {
-            echo "## cro/x v${v} (alpha 2)"
+            echo "## cro_x ${label}"
             echo
             awk -v h="## v${v} " 'index($0,h)==1{f=1;next} /^## v/{f=0} f' CHANGELOG.md
-            echo "Install: close the game, delete the old Interface/AddOns/CROX folder, unzip so the path is Interface/AddOns/CROX/CROX.toc. The login line in game should say v${v}."
+            echo "Install: close the game, delete the old Interface/AddOns/CROX folder, unzip so the path is Interface/AddOns/CROX/CROX.toc. The login line in game should say cro_x ${label}."
             echo
             echo "Report problems in game with /x bug. Tester checklist: docs/beta/Tester checklist.md"
           } > notes.md
-          gh release create "v${v}" "cro-x_v${v}_alpha2.zip" --title "cro/x v${v} alpha 2" --prerelease --notes-file notes.md
+          gh release create "v${v}" "cro-x_v${v}_alpha2.zip" --title "cro_x ${label}" --prerelease --notes-file notes.md

@@ -262,7 +262,7 @@ function Log.exportText()
   local cdb, pf = ns.cdb, ns.profile
   local out = {}
   local function add(s) out[#out + 1] = s end
-  add(("cro/x export · v%s · %s"):format(ns.VERSION, date and date("%Y-%m-%d %H:%M") or ""))
+  add(("cro/x export · %s · %s"):format(ns.BUILD, date and date("%Y-%m-%d %H:%M") or ""))
   add(("character: %s %s · temperament %s · homeland %s · upbringing %s · drive %s · chatty %d · filter %s"):format(
     pf.race or "?", (pf.class or "?"):lower(), cdb.temperament or "?", (cdb.homeland or "none"):gsub("^home:", ""),
     cdb.upbringing or "?", cdb.drive or "?", cdb.chatty or 2, cdb.filter and "on" or "off"))

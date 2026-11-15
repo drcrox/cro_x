@@ -1,6 +1,6 @@
 # cro/x — Combat Roleplay Options /x
 
-**Current build: v0.57 (alpha 2)** · [Download the latest](../../releases/latest) · [Changelog](CHANGELOG.md)
+**Current build: cro_x v.57a2** · [Download the latest](../../releases/latest) · [Changelog](CHANGELOG.md)
 
 A World of Warcraft: Forever add-on for the Horde. Your character speaks and emotes in combat, in their own voice: shaped by temperament, homeland, upbringing, what drives them, class, spec and professions.
 

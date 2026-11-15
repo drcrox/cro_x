@@ -55,7 +55,7 @@ for i in range(14):
 H.fire("PLAYER_REGEN_ENABLED")
 rep = str(ns.Bug.report("wording", "this line felt wrong " * 12, True))
 check("report fits Discord's limit", len(rep) <= 2000, len(rep))
-check("report names version, game build, reason", "v0.57" in rep and "1.15.7" in rep and "awkward" in rep)
+check("report names version, game build, reason", "v.57a2" in rep and "1.15.7" in rep and "awkward" in rep)
 check("report includes the last error", "last error" in rep and "kaboom in the engine" in rep)
 check("report includes the last fight", "last fight" in rep and "Warhorn" in rep)
 rep2 = str(ns.Bug.report("silent", "", False))

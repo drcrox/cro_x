@@ -339,7 +339,7 @@ local function buildOptions(parent)
   end)
   reset:SetPoint("TOPLEFT", 12, y - 4)
   y = y - 34
-  local ver = W.hint(s, ("cro/x v%s alpha 2 · built %s · /x help for commands"):format(ns.VERSION, ns.BUILD_DATE))
+  local ver = W.hint(s, ("cro_x %s · built %s · /x help for commands"):format(ns.BUILD, ns.BUILD_DATE))
   ver:SetPoint("TOPLEFT", 12, y - 4)
   local height = -y + 30
 
@@ -1307,7 +1307,7 @@ function ns.showSplash(onDone)
     splash.who:SetPoint("TOP", sub, "BOTTOM", 0, -10)
     local hint = W.hint(splash, "Type /x to open  ·  /x flag to review a fight")
     hint:SetPoint("TOP", splash.who, "BOTTOM", 0, -6)
-    local ver = W.hint(splash, ("v%s · alpha 2"):format(ns.VERSION))
+    local ver = W.hint(splash, ns.BUILD)
     ver:SetPoint("BOTTOMLEFT", 18, 16)
     local close = W.button(splash, "Close", 80, function() splash:Hide() end)
     close:SetPoint("BOTTOMRIGHT", -16, 40)

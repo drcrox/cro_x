@@ -2,7 +2,7 @@
 
 Newest first. Each build number matches `## Version` in `CROX/CROX.toc`, the login line in game, and the release on GitHub.
 
-## v0.57 (alpha 2)
+## v0.57 (alpha 2) · cro_x v.57a2
 - Horde splash page now uses the orc poster background, with a yellow "Show at login" checkbox in the bottom right corner.
 - Alliance screen: the Horde battleground timer logo is locked in above LOK'TAR OGAR, with "You have chosen your faction poorly." underneath.
 - The art picker no longer has a splash background choice (the splash and Alliance screens are fixed).

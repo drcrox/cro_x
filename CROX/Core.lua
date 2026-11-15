@@ -8,6 +8,8 @@
 local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
+-- Display label. Public releases are "v.57a2"; private working builds add a counter: "v.57a2.1", "v.57a2.2"...
+local BUILD = "v.57a2.1"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -38,7 +40,7 @@ local function spellName(id)
 end
 
 ns.p, ns.secret, ns.safe, ns.str, ns.num, ns.now, ns.wall = p, secret, safe, str, num, now, wall
-ns.VERSION, ns.BUILD_DATE = VERSION, BUILD_DATE
+ns.VERSION, ns.BUILD, ns.BUILD_DATE = VERSION, BUILD, BUILD_DATE
 
 ------------------------------------------------------------------------
 -- Settings
@@ -1123,7 +1125,7 @@ ev:SetScript("OnEvent", function(_, event, a1, ...)
       if ns.showAlliance and not cdb.alliance.disabled then pcall(ns.showAlliance) end
       return
     end
-    p(("v%s alpha 2 loaded%s. Type /x to open."):format(VERSION, hookOK and "" or " — |cffff6666button hook FAILED|r"))
+    p(("cro_x %s loaded%s. Type /x to open."):format(BUILD, hookOK and "" or " — |cffff6666button hook FAILED|r"))
     -- the splash page (and, the first time, the setup walkthrough) open from UI.lua
   elseif event == "PLAYER_ENTERING_WORLD" then
     pcall(scanDebuffs, false)

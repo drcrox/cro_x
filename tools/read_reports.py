@@ -19,7 +19,7 @@ def split_reports(text):
 
 def parse_bug(p):
     r = {"kind": "bug", "raw": p}
-    m = re.search(r"cro/x bug report · v([\d.]+) · game ([\d.]+) \((\w+)\)", p)
+    m = re.search(r"cro/x bug report · (v\.?[\w.]+) · game ([\d.]+) \((\w+)\)", p)
     r["version"] = m.group(1) if m else "?"
     r["game"] = f"{m.group(2)} ({m.group(3)})" if m else "?"
     m = re.search(r"(?m)^what: (.+)$", p)
@@ -41,7 +41,7 @@ def parse_bug(p):
 
 def parse_export(p):
     r = {"kind": "export", "raw": p}
-    m = re.search(r"cro/x export · v([\d.]+)", p)
+    m = re.search(r"cro/x export · (v\.?[\w.]+)", p)
     r["version"] = m.group(1) if m else "?"
     m = re.search(r"(?m)^character: (.+)$", p)
     r["character"] = m.group(1).strip() if m else "?"

@@ -86,7 +86,7 @@ function Bug.report(reason, note, withFight)
   local gv, gb = "?", "?"
   if GetBuildInfo then local a, b = GetBuildInfo() gv, gb = a or "?", b or "?" end
   local parts = {}
-  parts[#parts + 1] = ("cro/x bug report · v%s · game %s (%s)"):format(ns.VERSION or "?", gv, gb)
+  parts[#parts + 1] = ("cro/x bug report · %s · game %s (%s)"):format(ns.BUILD or "?", gv, gb)
   parts[#parts + 1] = "what: " .. reasonLabel(reason)
   if note and note ~= "" then parts[#parts + 1] = "note: " .. cut(note, 220) end
   parts[#parts + 1] = ("character: %s %s · %s · homeland %s · drive %s · chatty %s · filter %s · %s"):format(
