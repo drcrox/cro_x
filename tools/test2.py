@@ -147,7 +147,7 @@ tab2.Click(tab2)
 check("alliance tab opens", True)
 G.CROX2MainFrameTab1.Click(G.CROX2MainFrameTab1)
 # setup, review, export, alliance screen
-ns.openSetup(); check("setup opens", G.CROX2SetupFrame._shown)
+ns.openSetup(); check("setup (the splash) opens", G.CROX2SplashFrame._shown)
 ns.Log.openReview(); check("fight review opens", G.CROX2ReviewFrame._shown)
 ns.Log.openExport(); check("export opens", G.CROX2ExportFrame._shown)
 txt = ns.Log.exportText()
@@ -175,7 +175,7 @@ print("errors in chat:", [m for m in H.chat.values() if "error" in m.lower()])
 H.me.faction = "Horde"; ns.refreshProfile()
 ns.showSplash(); check("splash opens", G.CROX2SplashFrame._shown)
 ns.openArtPicker(); check("art picker opens", G.CROX2ArtFrame._shown)
-lua.eval("function(f) return f._scripts.OnUpdate[1] end")(G.CROX2SplashFrame)(G.CROX2SplashFrame, 9)
+lua.eval("function(f) return f._scripts.OnUpdate[1] end")(G.CROX2SplashFrame)(G.CROX2SplashFrame, 13)
 check("splash closes by itself", not G.CROX2SplashFrame._shown)
 r = lua.eval('''function(ns)
   ns.showSplash()
@@ -224,3 +224,22 @@ n_ex = len(list(ns.G.exchanges.values()))
 onAddon("CROX", "V2|RALLY|0|Krakka-7", "PARTY", "Krakka")
 last = ns.G.exchanges[len(list(ns.G.exchanges.values()))]
 check("a rally is logged as an exchange with its slots", last.id == "Krakka-7" and last.moment == "rally" and last.slots[1] is not None and last.slots[1] != "Krakka", (last.id, last.slots[1]))
+
+# --- setup lives on the splash
+r = lua.eval('''function(ns)
+  CROX2SplashFrame:Hide()
+  ns.cdb.setupDone = false
+  ns.cdb.temperament = nil
+  ns.showSplash()
+  local f = CROX2SplashFrame
+  f._scripts.OnUpdate[1](f, 60)
+  local stays = f:IsShown()                      -- first run: no auto close
+  local items = ns.choiceItems("temperament")
+  ns.cdb.temperament = items[2][1]
+  f:refreshChoices()
+  local hasDD = f.dds.temperament ~= nil and f.dds.homeland ~= nil and f.dds.upbringing ~= nil and f.dds.drive ~= nil and f.dds.pronouns ~= nil
+  f:Hide()
+  return {stays = stays, dd = hasDD, done = ns.cdb.setupDone, temp = ns.cdb.temperament == items[2][1]}
+end''')(ns)
+check("first run: splash stays open with all five dropdowns", r["stays"] and r["dd"])
+check("closing the splash finishes setup and keeps the choices", r["done"] and r["temp"])

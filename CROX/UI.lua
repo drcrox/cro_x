@@ -1007,74 +1007,6 @@ function ns.refreshUI()
 end
 
 ------------------------------------------------------------------------
--- First-login setup: the five choices one at a time
-------------------------------------------------------------------------
-local setup
-function ns.openSetup()
-  if ns.isAlliance() then return end
-  if not setup then
-    setup = W.panel("CROX2SetupFrame", "cro/x - who is your character?", 460, 260)
-    local page = CreateFrame("Frame", nil, setup)
-    page:SetPoint("TOPLEFT", 8, -26)
-    page:SetPoint("BOTTOMRIGHT", -8, 8)
-    ns.paintArea(page, "page", 0.55)
-    local step = 1
-    local q = W.heading(setup, "")
-    q:SetPoint("TOPLEFT", 20, -40)
-    local hint = W.hint(setup, "")
-    hint:SetPoint("TOPLEFT", q, "BOTTOMLEFT", 0, -4)
-    hint:SetWidth(420)
-    local dd = W.dropdown(setup, 200, function() return choiceItems(CHOICES[step][1]) end,
-      function() return cdb()[CHOICES[step][1]] end,
-      function(v) cdb()[CHOICES[step][1]] = v setup:fill() end)
-    dd:SetPoint("TOPLEFT", 4, -96)
-    local sample = W.text(setup, "", "GameFontHighlight")
-    sample:SetPoint("TOPLEFT", 20, -136)
-    sample:SetWidth(420)
-    local HINTS = {
-      temperament = "How your character talks in a fight. Colors every line.",
-      homeland = "Where they're from. Lines name it, in their own people's words.",
-      upbringing = "How they were raised.",
-      drive = "What they fight for.",
-      pronouns = "Used in emotes, like \"tightens [their] grip\".",
-    }
-    local back = W.button(setup, "Back", 80, function() step = math.max(1, step - 1) setup:fill() end)
-    back:SetPoint("BOTTOMLEFT", 16, 14)
-    local skip = W.button(setup, "Skip", 80, function() cdb().setupDone = true setup:Hide() end)
-    skip:SetPoint("LEFT", back, "RIGHT", 6, 0)
-    W.tooltip(skip, "Skip", "Keeps the defaults. You can change everything in the Character section, or redo setup.")
-    local nxt = W.button(setup, "Next", 100, function()
-      if step < #CHOICES then step = step + 1 setup:fill()
-      else
-        cdb().setupDone = true
-        setup:Hide()
-        p("all set. Type /x any time to change things.")
-        if ns.refreshUI then ns.refreshUI() end
-      end
-    end)
-    nxt:SetPoint("BOTTOMRIGHT", -16, 14)
-    function setup:fill()
-      local kind = CHOICES[step][1]
-      if kind == "homeland" and not cdb().homeland then
-        local list = ns.homelands()
-        if list[1] then cdb().homeland = list[1][1] end
-      end
-      q:SetText(("%d of %d · %s"):format(step, #CHOICES, CHOICES[step][2]))
-      hint:SetText(HINTS[kind] or "")
-      dd.refresh()
-      local line = ns.sample(kind)
-      sample:SetText(line and ("|cffffd100Sounds like:|r \"" .. line .. "\"") or "")
-      back:SetEnabled(step > 1)
-      nxt:SetText(step == #CHOICES and "Done" or "Next")
-    end
-    setup.reset = function() step = 1 end
-    setup:SetScript("OnShow", function() setup:fill() end)
-  end
-  setup.reset()
-  if setup:IsShown() then setup:fill() else setup:Show() end
-end
-
-------------------------------------------------------------------------
 -- Minimap button (off by default)
 ------------------------------------------------------------------------
 local mm
@@ -1264,13 +1196,24 @@ end
 -- Splash page at login
 ------------------------------------------------------------------------
 local splash
-local SPLASH_SECONDS = 8
+local SPLASH_SECONDS = 12
+
+-- The splash is also the setup: the character's five choices are dropdowns here. The first time (setup not
+-- done yet) it stays open until the player is finished; after that it closes by itself unless it's in use.
+local SPLASH_HINTS = {
+  temperament = "How you talk in a fight",
+  homeland = "Where you're from",
+  upbringing = "How you were raised",
+  drive = "What you fight for",
+  pronouns = "Used in emotes",
+}
 
 function ns.showSplash(onDone)
+  if ns.isAlliance() then return end
   if not splash then
     splash = W.make("Frame", UIParent, {"BackdropTemplate"}, "CROX2SplashFrame")
-    splash:SetSize(420, 330)
-    splash:SetPoint("CENTER", 0, 80)
+    splash:SetSize(560, 440)
+    splash:SetPoint("CENTER", 0, 40)
     splash:SetFrameStrata("DIALOG")
     splash:EnableMouse(true)
     if splash.SetBackdrop then
@@ -1284,59 +1227,90 @@ function ns.showSplash(onDone)
     posterBG(inner)
     local dim = inner:CreateTexture(nil, "BACKGROUND", nil, 0)
     dim:SetAllPoints()
-    dim:SetColorTexture(0, 0, 0, 0.45)
-    local low = inner:CreateTexture(nil, "BACKGROUND", nil, 1)
-    low:SetPoint("BOTTOMLEFT"); low:SetPoint("BOTTOMRIGHT"); low:SetHeight(70)
-    low:SetColorTexture(0, 0, 0, 0.4)
-    local crest = splash:CreateTexture(nil, "ARTWORK")
-    crest:SetSize(150, 150)
-    crest:SetPoint("TOP", 0, -18)
-    W.crest(crest)
+    dim:SetColorTexture(0, 0, 0, 0.3)
     local title = splash:CreateFontString(nil, "OVERLAY")
-    if not pcall(title.SetFont, title, "Fonts\\MORPHEUS.TTF", 40, "OUTLINE") then title:SetFontObject("GameFontNormalHuge") end
+    if not pcall(title.SetFont, title, "Fonts\\MORPHEUS.TTF", 38, "THICKOUTLINE") then title:SetFontObject("GameFontNormalHuge") end
     title:SetTextColor(1, 0.82, 0)
     title:SetText("cro/x")
-    title:SetPoint("TOP", crest, "BOTTOM", 0, -2)
+    title:SetPoint("TOP", 0, -24)
     local sub = W.text(splash, "Combat Roleplay Options /x", "GameFontHighlightLarge")
     sub:SetPoint("TOP", title, "BOTTOM", 0, -2)
     splash.who = W.text(splash, "", "GameFontHighlight")
-    splash.who:SetPoint("TOP", sub, "BOTTOM", 0, -10)
-    local hint = W.hint(splash, "Type /x to open  ·  /x flag to review a fight")
-    hint:SetPoint("TOP", splash.who, "BOTTOM", 0, -6)
+    splash.who:SetPoint("TOP", sub, "BOTTOM", 0, -6)
+    -- the choices, on a dark plate so they read over the picture
+    local plate = CreateFrame("Frame", nil, splash)
+    plate:SetPoint("TOP", splash.who, "BOTTOM", 0, -12)
+    plate:SetSize(500, 40 + #CHOICES * 34)
+    local pt = plate:CreateTexture(nil, "BACKGROUND")
+    pt:SetAllPoints()
+    pt:SetColorTexture(0, 0, 0, 0.62)
+    local head = W.heading(plate, "Who is your character?")
+    head:SetPoint("TOPLEFT", 14, -10)
+    splash.dds = {}
+    for i, ch in ipairs(CHOICES) do
+      local kind = ch[1]
+      local y = -34 - (i - 1) * 34
+      local label = W.text(plate, ch[2], "GameFontNormal")
+      label:SetPoint("TOPLEFT", 16, y - 6)
+      local dd = W.dropdown(plate, 170, function() return choiceItems(kind) end, function() return cdb()[kind] end,
+        function(v) cdb()[kind] = v splash:refreshChoices() end)
+      dd:SetPoint("TOPLEFT", 116, y + 2)
+      local hint = W.text(plate, SPLASH_HINTS[kind] or "", "GameFontDisableSmall")
+      hint:SetPoint("LEFT", dd, "RIGHT", -6, 2)
+      splash.dds[kind] = dd
+    end
+    local tip = W.hint(splash, "Type /x to open  ·  /x flag to review a fight  ·  change these any time under Character")
+    tip:SetPoint("TOP", plate, "BOTTOM", 0, -8)
     local ver = W.hint(splash, ns.BUILD)
-    ver:SetPoint("BOTTOMLEFT", 18, 16)
-    local close = W.button(splash, "Close", 80, function() splash:Hide() end)
-    close:SetPoint("BOTTOMRIGHT", -16, 40)
+    ver:SetPoint("BOTTOMLEFT", 22, 20)
+    local done = W.button(splash, "Done", 90, function() splash:Hide() end)
+    done:SetPoint("BOTTOMRIGHT", -24, 46)
     local open = W.button(splash, "Open cro/x", 110, function() splash:Hide() if ns.toggleMain then ns.toggleMain() end end)
-    open:SetPoint("RIGHT", close, "LEFT", -6, 0)
+    open:SetPoint("RIGHT", done, "LEFT", -6, 0)
     -- yellow Blizzard checkbox, bottom right of the picture; unchecking stops the splash at login
     local show = W.check(splash, "Show at login", function(_, on) cdb().splash = on and true or false end)
-    show:SetPoint("BOTTOMRIGHT", -100, 14)
+    show:SetPoint("BOTTOMRIGHT", -110, 18)
     splash.show = show
+    function splash:refreshChoices()
+      local c = cdb()
+      if not c.homeland then
+        local list = ns.homelands()
+        if list[1] then c.homeland = list[1][1] end
+      end
+      for _, dd in pairs(self.dds) do dd.refresh() end
+      local home
+      for _, h in ipairs(ns.homelands()) do if h[1] == c.homeland then home = h[2] end end
+      self.who:SetText(("%s · %s %s"):format(ns.profile.name or "", ns.profile.race or "", cap(ns.profile.class or "")))
+      if ns.refreshUI then ns.refreshUI() end
+    end
     splash:SetScript("OnUpdate", function(self, el)
-      if self:IsMouseOver() then self.left = SPLASH_SECONDS return end
+      local busy = not cdb().setupDone or self:IsMouseOver() or (DropDownList1 and DropDownList1:IsShown())
+      if busy then self.left = SPLASH_SECONDS return end
       self.left = (self.left or SPLASH_SECONDS) - (el or 0)
       if self.left <= 0 then self:Hide() end
     end)
     splash:SetScript("OnHide", function(self)
       W.sound("close")
+      if CloseDropDownMenus then pcall(CloseDropDownMenus) end
+      if not cdb().setupDone then
+        cdb().setupDone = true
+        p("all set. Type /x any time to change things.")
+      end
       local cb = self.onDone
       self.onDone = nil
       if cb then cb() end
     end)
   end
-  local c = cdb()
-  local home
-  for _, h in ipairs(ns.homelands()) do if h[1] == c.homeland then home = h[2] end end
-  splash.who:SetText(c.setupDone and ("%s · %s · %s · %s · %s"):format(ns.profile.name or "", c.temperament or "",
-    home or "no homeland", c.upbringing or "", c.drive or "") or (ns.profile.name or "") .. " - let's meet your character.")
-  splash.show:SetChecked(c.splash ~= false)
+  splash:refreshChoices()
+  splash.show:SetChecked(cdb().splash ~= false)
   splash.left = SPLASH_SECONDS
   splash.onDone = onDone
   splash:Show()
   if UIFrameFadeIn then pcall(UIFrameFadeIn, splash, 0.6, 0, 1) end
   W.sound("open")
 end
+-- /x setup and "Redo setup" bring the same page back
+function ns.openSetup() ns.showSplash() end
 
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
@@ -1344,10 +1318,9 @@ ev:SetScript("OnEvent", function()
   pcall(ns.updateMinimap)
   pcall(ns.applyArt)
   if not ns.cdb or ns.isAlliance() or not ns.cdb.on then return end
-  local function setupIfNeeded() if not ns.cdb.setupDone then pcall(ns.openSetup) end end
-  if ns.cdb.splash then
-    C_Timer.After(1.5, function() pcall(ns.showSplash, setupIfNeeded) end)
-  else
-    C_Timer.After(2, setupIfNeeded)
+  -- first run always shows it (that's where the choices are made); after that, only if "Show at login" is on
+  if ns.cdb.splash or not ns.cdb.setupDone then
+    C_Timer.After(1.5, function() pcall(ns.showSplash) end)
   end
 end)
+

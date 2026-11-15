@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.5 · 2026-11-15
+- Setup now lives on the splash: temperament, homeland, upbringing, drive and pronouns are dropdowns there. First run keeps the splash open until Done; /x setup and Redo setup reopen it. The step-by-step walkthrough is gone.
+
 ## 0.57-alpha2.4 · 2026-11-15
 - Alliance screen: the whole poster is shown (fitted, never cropped), the timer logo is enlarged behind the centered text. The Horde splash uses the same whole picture.
 
