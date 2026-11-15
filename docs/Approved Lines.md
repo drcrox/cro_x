@@ -1,4 +1,4 @@
-# cro.x Alpha 2 — Approved Lines
+# cro_x Alpha 2 — Approved Lines
 
 The baseline stock phrases for the second alpha, by archetype. Every line here was picked by hand and is final.
 
@@ -8,7 +8,7 @@ The baseline stock phrases for the second alpha, by archetype. Every line here w
 - Repeat until the pool is at its target size. Targets come from the pool tiers in the design doc (20 / 12 / 8 / 5 voice; 5 or 3 emotes).
 - Baseline lines must be **neutral**: each has to sound right for any class that has that archetype, caster or martial. Flavor that only fits one kind of action goes in the damage-type extras.
 - The first build's approved lines are included as options when their archetype comes up.
-- Media and meme references are a separate optional category, skipped for now. See **cro.x — Reference Bank**.
+- Media and meme references are a separate optional category, skipped for now. See **cro_x — Reference Bank**.
 - **Targets are minimums, not limits (2026-11-15).** Keep every line you like; a soft ceiling of about double the target keeps pools even. Archetypes finished before this rule keep their current size; their unpicked options are set aside at the bottom of this doc for a later build.
 
 **Writing standard (2026-11-15):** every line is written with care for tone, denotation and connotation, the context of the ability or moment it fires on, and sentence syntax. Shouts end with "!"; taunting questions use "?!". **One sentence where the thought continues:** join with "..." or " - " (a plain hyphen, which always shows in game chat) rather than starting a new sentence. Two sentences stay only when a literary device earns the break: comedic timing, dramatic irony, staccato urgency, repetition for effect, a question the speaker answers, a callback or twist, a pause before a reveal. Temperament is about *what* is said, not volume: grim is dark and fatalistic but still exclamatory; only calm keeps measured, period-ended lines. Heavy-hitter lines must also work at the start of a cast, before the spell lands.
@@ -574,7 +574,7 @@ The next press after your target dies, within a few seconds. Wins over the Opene
 5. turns to look for the next foe.
 
 ## Debuff callouts (final, 2026-11-15)
-A **new** debuff on you is announced on your next press. **How often (decided 2026-11-15):** in a group, the call-and-response call replaces the callout; solo (or with no cro.x helper), at most one callout every 20 seconds, counted toward the pace. `[debuff]` = the debuff's name; lines using it are skipped when the game hides the name.
+A **new** debuff on you is announced on your next press. **How often (decided 2026-11-15):** in a group, the call-and-response call replaces the callout; solo (or with no cro/x helper), at most one callout every 20 seconds, counted toward the pace. `[debuff]` = the debuff's name; lines using it are skipped when the game hides the name.
 
 **Poisoned (final)** — voice: My veins are on fire! · Shaman! Druid! Paladin! Cure me! {someone in the group can cure it} · [debuff]?! Coward's weapon! · I've been poisoned! · Ugh, poison! — emotes: coughs, poison spreading. · grimaces as the poison spreads. · clutches the poisoned wound.
 
@@ -799,13 +799,13 @@ Center 4: fury; capitals for the peaks.
 - **Explosives:** Eat fire! [4] · Blow up, already! [3] · JUST BLOW UP! [3] · Out of my way - BOOM! [3]
 
 ## Even-out report (2026-11-15)
-All six temperaments now meet the frozen targets in every pool. Over the targets (picks kept, decision deferred): **hot-headed +1** (Explosives: both "Blow up, already!" and "JUST BLOW UP!" kept, 2026-11-15) · **cocky +9** — Opener +2, Filler +2, Heavy hitter +1, Upkeep +1, Reactive +1, Raise +2. Everything else is exact.
+All six temperaments now meet the frozen targets in every pool. Over the targets (picks kept - **decided 2026-11-15: keep all, no evening out**; each temperament draws only from its own lines, so extras just mean less repetition): **hot-headed +1** (Explosives: both "Blow up, already!" and "JUST BLOW UP!" kept, 2026-11-15) · **cocky +9** — Opener +2, Filler +2, Heavy hitter +1, Upkeep +1, Reactive +1, Raise +2. Everything else is exact.
 
 ## (Historical) Still to write to even out (185 lines, after the grim and gruff round)
 Grim done · Gruff done · Cocky done · Calm 40 · Cheerful 41 · Hot-headed 43. **Targets frozen (2026-11-15):** each slot asks for what's needed. **Overages are kept for now (decided 2026-11-15):** picks over the count stay; once all temperaments are done, a report shows where each went over, and evening out is decided then.
 
 ## Set aside for a later build
-Every option shown for a finished archetype and not kept. Nothing here is approved; a later build may bring favorites back. (Not-neutral options from the first Opener round, like "En garde!" and "Draw!", and meme references live elsewhere: references in **cro.x — Reference Bank**.)
+Every option shown for a finished archetype and not kept. Nothing here is approved; a later build may bring favorites back. (Not-neutral options from the first Opener round, like "En garde!" and "Draw!", and meme references live elsewhere: references in **cro_x — Reference Bank**.)
 
 **Opener** — voice: It's go time! · Ready or not, here I come! · Wrong place, wrong time! · Surprise! · Here we go! · Let's begin! · There you are! · I've got you now! · You're first! · You'll do. · I've been waiting for this! · Now it starts! · You should have run! · Enough talk! · No way out now! · This is going to hurt! · My turn! · Welcome to the fight! · No turning back now! · Shall we? · Your move! · Places, everyone! · Time to pay up! · On your guard! · Found you! · Let's not waste time. · You chose this! · Remember this moment! · Fair warning! · Brace yourself! · Nowhere to hide! · Face me, coward! · Hold still! This won't take long. · Time's up! · Now you've done it! · Let's get to it! · No more hiding!
 

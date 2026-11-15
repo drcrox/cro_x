@@ -92,15 +92,15 @@ Approved exchanges:
 The lines shown are examples; each call and reply gets its own pool (not written yet).
 
 ## Decisions so far
-- **Name (decided 2026-11-15):** **cro/x**, always lowercase; full title **Combat Roleplay Options /x**, after the `/x` command (replaces cro.x and CRO/X). A slash can't go in a folder or file name, so the addon's folder and files stay `CROX`; the in-game addon list and CurseForge show "cro/x".
+- **Name (decided 2026-11-15):** **cro/x**, always lowercase; full title **Combat Roleplay Options /x**, after the `/x` command (replaces cro/x and CRO/X). A slash can't go in a folder or file name, so the addon's folder and files stay `CROX`; the in-game addon list and CurseForge show "cro/x".
 - **Command (2026-11-15):** `/x`, with `/crox` kept as a second command that always works (in case another addon also claims `/x`).
 - **Horde only.** No Alliance functionality at all.
 - **Alliance screen:** on an Alliance character, every time (at login and whenever the command is typed), a black panel shows "LOK'TAR OGAR" in red, in the game's heavy display font, over the dimmed Horde emblem (the game's own artwork). The only control is a checkbox, "Disable addon and reroll Horde". Ticking it switches cro/x off for that character and closes the panel.
 - **Archetypes are the trunk.** Every combat ability belongs to one of 30 archetypes on six branches (Hurt, Hinder, Protect, Mend, Empower, Command). See **CRO-X Alpha 2 — Archetype Map**.
 - **Quiet archetypes:** Self-buff, Stance or form, Recharge, Pet order and hunter Call Pet have no lines.
-- **Stock phrases per archetype.** Simple, familiar, cliché lines and emotes any class could say. Baseline lines must be neutral: they have to fit every class that has the archetype, caster or martial. All approved lines are in **cro.x Alpha 2 — Approved Lines**.
+- **Stock phrases per archetype.** Simple, familiar, cliché lines and emotes any class could say. Baseline lines must be neutral: they have to fit every class that has the archetype, caster or martial. All approved lines are in **cro_x Alpha 2 — Approved Lines**.
 - **Class-specific pools** are allowed where they add real flavor. First one: warlock summons (lore-friendly; only officially translated Eredun phrases).
-- **Media and meme references** are a separate optional category players can switch on. Skipped for now; every reference offered is kept in **cro.x — Reference Bank**.
+- **Media and meme references** are a separate optional category players can switch on. Skipped for now; every reference offered is kept in **cro_x — Reference Bank**.
 - **First-login character setup.** The addon reads race and class. The player then answers a few pick-one questions, a light backstory:
   - Temperament: gruff, cheerful, grim, cocky, calm, hot-headed.
   - Homeland: a list by race (decided 2026-11-15; adjust in the beta):
@@ -188,8 +188,8 @@ Repeats: keep the first alpha's no-repeat memory, and larger pools.
 
 ## Status (2026-11-15)
 - **Done:** archetype map; stock phrases for every archetype; warlock summons; After a kill; debuff callouts; consumables.
-- **Done since:** call and response; temperament even-out (calm, cheerful, hot-headed drafted by Claude from the Writing Profile, for the beta audit).
-- **Drafted by Claude (2026-11-15), for the beta audit:** all tag pools (drive, upbringing, homeland, class, spec by talent row, professions) and the damage-type extras. See **cro.x Alpha 2 — Tag Pools (draft)**.
+- **Done since:** call and response; temperament even-out (calm, cheerful, hot-headed drafted by Claude from the Writing Profile, for the beta audit).  Overage report settled (2026-11-15): cocky +9 and hot-headed +1 are kept as written. Docs renamed to the cro_x form (a slash can't go in a doc name).
+- **Drafted by Claude (2026-11-15), for the beta audit:** all tag pools (drive, upbringing, homeland, class, spec by talent row, professions) and the damage-type extras. See **cro_x Alpha 2 — Tag Pools (draft)**.
 - **Built (2026-11-15): v0.50, alpha 2.** Folder `CROX` (replaces the first alpha's files; its saved settings are left alone). Files: Lines.lua and Abilities.lua (generated from the docs), Troll.lua (carried over), Core.lua (engine), Widgets.lua (Blizzard parts), Group.lua (party pacing, call and response), Log.lua (log, fight review, export), UI.lua (window, setup, Alliance screen), Bindings.xml (the "Review a fight" key). Tested outside the game in a Lua 5.1 harness with stand-ins for the game's API: solo pace held at about 3 lines a minute; call and response, party hold, temperament marks, profanity filter, troll voice, facts rule, every window section at two sizes, fight review, export and the Alliance screen all passed. Not yet tested in the game.
 - **v0.51 (2026-11-15):** Character section rebuilt on a fixed grid (labels in one column, dropdowns lined up, the sample line beside each dropdown, or beneath it when narrow). Splash page at login (the Horde crest, title, the character's choices, Open and Close; closes by itself after 8 seconds unless the mouse is on it; Options > Show the splash page at login). Crest art picker (`/x art`, or Options > Crest art) offering the larger Horde crests that ship with the game client; the first build can't know which exist in Forever's client, so the player picks the sharpest one that shows up.
 - **Outside art (revised 2026-11-15):** cro/x may ship image files from the internet, downloaded and converted into the addon's own folder (addons can't load anything from the internet while the game runs). Every outside file gets an entry in Credits.lua: what it is, who made it, where it came from, its license, and where it's used. Only files whose license allows redistribution are added (public domain, CC0, CC BY, CC BY-SA, or the artist's written permission). Blizzard's artwork, including the Horde crest, isn't shipped as a file; it's loaded from the game client by path.

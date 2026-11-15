@@ -1,6 +1,6 @@
-# cro.x Alpha 2 — Tag Pools (draft)
+# cro_x Alpha 2 — Tag Pools (draft)
 
-Drafted by Claude from **cro.x — Writing Profile**, 2026-11-15. Nothing here is hand-picked yet: all of it is for the beta audit (audit, purge, refine).
+Drafted by Claude from **cro_x — Writing Profile**, 2026-11-15. Nothing here is hand-picked yet: all of it is for the beta audit (audit, purge, refine).
 
 ## How these pools work
 - About 1 line in 3 comes from a tag instead of the baseline pools. Weights: class 20%, drive 15%, homeland 10%, upbringing 10%, spec 10%, professions 10%.
