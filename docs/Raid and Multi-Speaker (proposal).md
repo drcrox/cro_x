@@ -38,7 +38,7 @@ No raid leader addon and no negotiation. Every addon sees the same roster and th
 - Echo lines for chorus voices.
 
 ## Build order
-1. **Now (cheap, no behavior change):** put an id and a slot list into the message format, add the protocol version, make the answerer choice go through the same ranking function, and have the log record every slot.
+1. **Built in 0.57-alpha2.3:** put an id and a slot list into the message format, add the protocol version, make the answerer choice go through the same ranking function, and have the last 10 exchanges and their slots recorded and shown in /x bug reports (other players as their class). The ranked pick replaced "first name alphabetically" for rally and kill answers, so the same player no longer always answers.
 2. **Alpha, after the first in-game results:** chorus slots and a raid budget, tested with two and then five real players.
 3. **Real raid testing** is its own milestone; it needs a crowd of cro_x users, so it likely belongs to beta.
 

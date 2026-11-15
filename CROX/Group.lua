@@ -20,6 +20,52 @@ local REPLY_WINDOW = 6
 local PARTY_HOLD = 5
 local PARTY_CAP = {[1] = 3, [2] = 5, [3] = 6}
 
+-- Multi-speaker groundwork (see docs/Raid and Multi-Speaker (proposal).md).
+-- A moment that several characters can answer is an "exchange": an id, the moment, who started it, and a list
+-- of speaker slots. Nobody negotiates: every addon sees the same roster and the same id, so each works out the
+-- same speakers with the same ranking function. PROTO goes out with HI so builds with different rules can mix.
+G.PROTO = 1
+local SLOTS = {rally = 1, kill = 1}      -- answerers wanted per moment; raids will raise these
+local exCounter = 0
+local exchanges = {}                      -- the last few exchanges, newest last: {id, moment, from, slots, t}
+G.exchanges = exchanges
+
+local function hashName(s)             -- exact in double precision, so every machine gets the same numbers
+  local h = 12345
+  for i = 1, #s do h = ((h + s:byte(i)) * 48271) % 2147483647 end
+  for _ = 1, 3 do h = (h * 48271) % 2147483647 end
+  return h
+end
+
+-- the same order on every machine for a given exchange id
+function G.rank(xid, names)
+  local out = {}
+  for i, n in ipairs(names) do out[i] = n end
+  local key = {}
+  for _, n in ipairs(out) do key[n] = hashName(tostring(xid) .. "|" .. n) end
+  table.sort(out, function(a, b) if key[a] ~= key[b] then return key[a] < key[b] end return a < b end)
+  return out
+end
+
+-- the first n of the ranked candidates, leaving out anyone in `skip`
+function G.speakers(xid, candidates, n, skip)
+  local list = {}
+  for _, name in ipairs(candidates) do if not (skip and skip[name]) then list[#list + 1] = name end end
+  local ranked, out = G.rank(xid, list), {}
+  for i = 1, math.min(n or 1, #ranked) do out[i] = ranked[i] end
+  return out
+end
+
+local function noteExchange(xid, moment, from, slots)
+  exchanges[#exchanges + 1] = {id = xid, moment = moment, from = from, slots = slots, t = now()}
+  while #exchanges > 10 do table.remove(exchanges, 1) end
+end
+
+local function newExchangeId()
+  exCounter = exCounter + 1
+  return (ns.profile.name or "?") .. "-" .. exCounter
+end
+
 local function me() return ns.profile.name or str(safe(UnitName, "player")) end
 local function short(n) if type(n) ~= "string" or secret(n) then return nil end return n:match("^[^-]+") or n end
 local function grouped() return safe(IsInGroup) and true or false end
@@ -241,7 +287,9 @@ function G.onPress(info, t)
       ctx.debuffName, ctx.debuffType = d.name, d.kind
       if sayCR("cr:debuffhelp:call", "call", helper, ctx) then
         lastCall.debuffhelp = t
-        send("CALL", "debuffhelp", helper, d.kind)
+        local x = newExchangeId()
+        noteExchange(x, "debuffhelp", me(), {helper})
+        send("CALL", "debuffhelp", helper, d.kind, x)
         return true
       end
     end
@@ -254,7 +302,9 @@ function G.onPress(info, t)
     if helper then
       if sayCR("cr:lowhealth:call", "call", helper) then
         lastCall.lowhealth = t
-        send("CALL", "lowhealth", helper)
+        local x = newExchangeId()
+        noteExchange(x, "lowhealth", me(), {helper})
+        send("CALL", "lowhealth", helper, "", x)
         return true
       end
     end
@@ -270,7 +320,9 @@ function G.onPress(info, t)
       local helper = helperFor("T")
       if helper and sayCR("cr:getoff:call", "call", helper) then
         lastCall.getoff = t
-        send("CALL", "getoff", helper)
+        local x = newExchangeId()
+        noteExchange(x, "getoff", me(), {helper})
+        send("CALL", "getoff", helper, "", x)
         return true
       end
     end
@@ -279,18 +331,20 @@ function G.onPress(info, t)
 end
 
 -- Core tells us when it said a rally or kill line: one other member answers
-function G.onRallySpoken() send("RALLY") end
-function G.onKillSpoken() send("KILL") end
+function G.onRallySpoken() local x = newExchangeId() noteExchange(x, "rally", me(), {}) send("RALLY", x) end
+function G.onKillSpoken() local x = newExchangeId() noteExchange(x, "kill", me(), {}) send("KILL", x) end
 
 ------------------------------------------------------------------------
 -- Receiving
 ------------------------------------------------------------------------
--- exactly one member answers a rally or a kill: the first name alphabetically, leaving out the caller
-local function iAmTheAnswerer(caller)
+-- the members who answer a rally or a kill: the same ranked pick on every machine, never the caller
+local function answerers(caller, xid, n)
   local list = others()
   list[#list + 1] = me()
-  table.sort(list)
-  for _, name in ipairs(list) do if name ~= caller then return name == me() end end
+  return G.speakers(xid, list, n, {[caller] = true})
+end
+local function iAmAnAnswerer(list)
+  for _, name in ipairs(list) do if name == me() then return true end end
   return false
 end
 
@@ -309,16 +363,22 @@ local function onAddon(prefix, msg, ch, sender)
   local t = now()
   if kind == "HI" then
     local isNew = not m.ver
-    m.ver, m.class = parts[4], parts[5]
-    if isNew then send("HI", ns.VERSION, ns.profile.class or "") end
+    m.ver, m.class, m.proto = parts[4], parts[5], tonumber(parts[6])
+    if isNew then send("HI", ns.VERSION, ns.profile.class or "", G.PROTO) end
   elseif kind == "ST" then
     m.flags, m.flagsT = parts[4] or "", t
   elseif kind == "SP" then
     notePartyLine(from)
   elseif kind == "CALL" then
-    if parts[5] == me() then pendingReply = {kind = parts[4], caller = from, t = t, dtype = parts[6]} end
+    local xid = (parts[7] and parts[7] ~= "") and parts[7] or (from .. "-" .. math.floor(t))
+    noteExchange(xid, parts[4], from, {parts[5]})
+    if parts[5] == me() then pendingReply = {kind = parts[4], caller = from, t = t, dtype = parts[6], xid = xid} end
   elseif kind == "RALLY" or kind == "KILL" then
-    if ns.cdb.cr and iAmTheAnswerer(from) then pendingReply = {kind = kind == "RALLY" and "rally" or "kill", caller = from, t = t} end
+    local moment = kind == "RALLY" and "rally" or "kill"
+    local xid = (parts[4] and parts[4] ~= "") and parts[4] or (from .. "-" .. math.floor(t))
+    local who = answerers(from, xid, SLOTS[moment])
+    noteExchange(xid, moment, from, who)
+    if ns.cdb.cr and iAmAnAnswerer(who) then pendingReply = {kind = moment, caller = from, t = t, xid = xid} end
   elseif kind == "SAVED" then
     if parts[4] == me() and ns.cdb.cr then pendingThanks = {helper = from, t = t} end
   elseif kind == "THANKS" then
@@ -355,8 +415,8 @@ ev:SetScript("OnEvent", function(_, event, ...)
     lastFlags = nil
     return
   end
-  if grouped() then send("HI", ns.VERSION, ns.profile.class or "") end
+  if grouped() then send("HI", ns.VERSION, ns.profile.class or "", G.PROTO) end
 end)
 
-G._test = {onAddon = onAddon, members = members, setPending = function(v) pendingReply = v end,
+G._test = {answerers = answerers, exchanges = exchanges, onAddon = onAddon, members = members, setPending = function(v) pendingReply = v end,
   setThanks = function(v) pendingThanks = v end, myFlags = myFlags, helperFor = helperFor}

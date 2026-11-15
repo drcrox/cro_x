@@ -95,6 +95,16 @@ function Bug.report(reason, note, withFight)
     cdb.filter and "on" or "off", cdb.on == false and "OFF" or "on")
   parts[#parts + 1] = "hook: " .. ((ns.hookOK and ns.hookOK()) and "ok" or "NOT WORKING") ..
     " · errors this session: " .. Bug.errorCount()
+  if ns.G and ns.G.exchanges and #ns.G.exchanges > 0 then
+    local xs, G = {}, ns.G
+    for i = math.max(1, #G.exchanges - 2), #G.exchanges do
+      local x = G.exchanges[i]
+      local who = {}
+      for _, n in ipairs(x.slots or {}) do who[#who + 1] = (G.members[n] and G.members[n].class) or "me/?" end
+      xs[#xs + 1] = ("%s x%d (%s)"):format(x.moment or "?", #(x.slots or {}), table.concat(who, ","))
+    end
+    parts[#parts + 1] = ("group: protocol %s · recent exchanges (other players shown as class): %s"):format(tostring(G.PROTO), table.concat(xs, " | "))
+  end
   local le = Bug.lastError()
   if le then parts[#parts + 1] = "last error" .. (le.count > 1 and (" (x" .. le.count .. ")") or "") .. ": " .. le.msg end
   if ns.Log then

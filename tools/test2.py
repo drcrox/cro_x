@@ -201,3 +201,26 @@ r = lua.eval('''function(ns)
   ns.db.bg = 2 ns.db.page = 2 ns.db.charBg = 2 ns.applyArt()
   return #out end''')(ns)
 check("art browser cells click and every painted area repaints", r > 0, r)
+
+# --- multi-speaker groundwork
+r = lua.eval('''function(ns)
+  local G = ns.G
+  local a = G.rank("x1", {"Ann", "Bo", "Cy", "Di", "Ed"})
+  local b = G.rank("x1", {"Ed", "Di", "Cy", "Bo", "Ann"})
+  local same = table.concat(a, ",") == table.concat(b, ",")
+  local firsts, seen = {}, 0
+  for i = 1, 30 do local f = G.rank("id" .. i, {"Ann", "Bo", "Cy", "Di", "Ed"})[1] if not firsts[f] then firsts[f] = true seen = seen + 1 end end
+  local two = G.speakers("x1", {"Ann", "Bo", "Cy"}, 2, {Ann = true})
+  local none = G.speakers("x1", {"Ann"}, 3, {Ann = true})
+  return {same = same, varied = seen, two = #two, noAnn = two[1] ~= "Ann" and two[2] ~= "Ann", none = #none}
+end''')(ns)
+check("speaker ranking is the same on every machine", r["same"])
+check("the ranked first speaker varies between exchanges", r["varied"] >= 3, r["varied"])
+check("speakers: n slots, skip list honored, empty when nobody left", r["two"] == 2 and r["noAnn"] and r["none"] == 0)
+H.group = True
+onAddon("CROX", "V2|HI|0|0.57|SHAMAN|1", "PARTY", "Krakka")
+check("HI stores the protocol version", ns.G.members.Krakka.proto == 1)
+n_ex = len(list(ns.G.exchanges.values()))
+onAddon("CROX", "V2|RALLY|0|Krakka-7", "PARTY", "Krakka")
+last = ns.G.exchanges[len(list(ns.G.exchanges.values()))]
+check("a rally is logged as an exchange with its slots", last.id == "Krakka-7" and last.moment == "rally" and last.slots[1] is not None and last.slots[1] != "Krakka", (last.id, last.slots[1]))
