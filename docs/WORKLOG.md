@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.4 · 2026-11-15
+- Alliance screen: the whole poster is shown (fitted, never cropped), the timer logo is enlarged behind the centered text. The Horde splash uses the same whole picture.
+
 ## 0.57-alpha2.3 · 2026-11-15
 - Multi-speaker groundwork: exchanges with ids and speaker slots, one ranking function every addon computes the same way, protocol version in HI, last 10 exchanges in /x bug reports.
 - Rally and kill answers now come from a ranked pick per exchange instead of always the first name alphabetically.

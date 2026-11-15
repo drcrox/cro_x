@@ -50,25 +50,22 @@ local function cap(s) return s and (s:sub(1, 1):upper() .. s:sub(2)) or "" end
 -- Alliance screen
 ------------------------------------------------------------------------
 -- The fixed Blizzard-poster background used by the Alliance screen and the Horde splash (see Credits).
--- It is not part of the art picker. The image sits in the top part of a 1024 square, so the texture
--- coordinates cover only that part and crop to the frame's shape without stretching.
-local function posterBG(f)
+-- It is not part of the art picker. The whole picture is always shown: it is fitted inside the frame at its own
+-- 4:3 shape (never cropped or stretched), and any spare room stays dark. The image sits in the top three
+-- quarters of a 1024 square texture. onSize(w, h) lets a screen resize its own parts when the frame changes.
+local function posterBG(f, onSize)
   local poster = f:CreateTexture(nil, "BACKGROUND", nil, -1)
-  poster:SetAllPoints()
   poster:SetTexture("Interface\\AddOns\\CROX\\Art\\AllianceBG")
-  local IMG_ASPECT, IMG_H = 1024 / 786, 786 / 1024
+  poster:SetTexCoord(0, 1, 0, 0.75)
   local function fit()
     local w, h = f:GetWidth(), f:GetHeight()
     if not w or not h or w < 1 or h < 1 then return end
-    local frameAspect = w / h
-    local u0, u1, v0, v1 = 0, 1, 0, IMG_H
-    if frameAspect > IMG_ASPECT then          -- frame is wider: trim top and bottom
-      local keep = IMG_ASPECT / frameAspect
-      v0 = IMG_H * (1 - keep) / 2; v1 = IMG_H - v0
-    else                                      -- frame is taller: trim left (keep the orc on the right)
-      u0 = 1 - frameAspect / IMG_ASPECT
-    end
-    poster:SetTexCoord(u0, u1, v0, v1)
+    local pw, ph = w, w * 0.75
+    if ph > h then pw, ph = h / 0.75, h end
+    poster:ClearAllPoints()
+    poster:SetPoint("CENTER")
+    poster:SetSize(pw, ph)
+    if onSize then onSize(w, h) end
   end
   f:SetScript("OnSizeChanged", fit)
   fit()
@@ -80,25 +77,24 @@ local function allianceArt(parent, withCheckbox)
   local bg = f:CreateTexture(nil, "BACKGROUND", nil, -2)
   bg:SetAllPoints()
   bg:SetColorTexture(0, 0, 0, 0.95)
-  local poster = posterBG(f)
-  local shade = f:CreateTexture(nil, "BACKGROUND", nil, 0)
-  shade:SetPoint("BOTTOMLEFT"); shade:SetPoint("BOTTOMRIGHT"); shade:SetHeight(140)
-  shade:SetColorTexture(0, 0, 0, 0.45)
-  -- the Horde battleground timer logo, locked in (not the crest the player picked for Horde screens)
+  -- the Horde battleground timer logo, locked in and enlarged behind the words
   local logo = f:CreateTexture(nil, "ARTWORK")
   W.crest(logo, 2)
-  logo:SetSize(130, 130)
-  logo:SetPoint("TOP", 0, -14)
+  logo:SetPoint("CENTER", 0, 4)
+  logo:SetAlpha(0.7)
+  local function resize(w, h) local d = math.min(w, h) * 0.8 logo:SetSize(d, d) end
+  local poster = posterBG(f, resize)
+  resize(f:GetWidth() or 400, f:GetHeight() or 300)
   local title = f:CreateFontString(nil, "OVERLAY")
   if not pcall(title.SetFont, title, "Fonts\\MORPHEUS.TTF", 46, "THICKOUTLINE") then title:SetFontObject("GameFontNormalHuge") end
   title:SetTextColor(0.85, 0.08, 0.05)
   title:SetText("LOK'TAR OGAR")
-  title:SetPoint("BOTTOM", 0, 78)
+  title:SetPoint("CENTER", 0, 18)
   local sub = f:CreateFontString(nil, "OVERLAY")
-  if not pcall(sub.SetFont, sub, "Fonts\\MORPHEUS.TTF", 20, "OUTLINE") then sub:SetFontObject("GameFontNormalLarge") end
-  sub:SetTextColor(0.95, 0.9, 0.8)
+  if not pcall(sub.SetFont, sub, "Fonts\\MORPHEUS.TTF", 20, "THICKOUTLINE") then sub:SetFontObject("GameFontNormalLarge") end
+  sub:SetTextColor(0.96, 0.92, 0.82)
   sub:SetText("You have chosen your faction poorly.")
-  sub:SetPoint("TOP", title, "BOTTOM", 0, -4)
+  sub:SetPoint("TOP", title, "BOTTOM", 0, -8)
   f.poster, f.logo, f.title, f.sub = poster, logo, title, sub
   if withCheckbox then
     local c = W.check(f, "Disable addon and reroll Horde", function(_, on)
