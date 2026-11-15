@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.6 · 2026-11-15
+- Window header now reads "Combat Roleplay Options - cro/x"; the splash subtitle drops the trailing /x.
+
 ## 0.57-alpha2.5 · 2026-11-15
 - Setup now lives on the splash: temperament, homeland, upbringing, drive and pronouns are dropdowns there. First run keeps the splash open until Done; /x setup and Redo setup reopen it. The step-by-step walkthrough is gone.
 

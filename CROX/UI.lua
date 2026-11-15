@@ -906,7 +906,7 @@ local function selectTab(id)
 end
 
 local function buildMain()
-  main = W.panel("CROX2MainFrame", "cro/x - Combat Roleplay Options /x", BASE_W, BASE_H)
+  main = W.panel("CROX2MainFrame", "Combat Roleplay Options - cro/x", BASE_W, BASE_H)
   main.onMoved = saveWindow
   -- the Horde crest beside the title
   local crest = main:CreateTexture(nil, "OVERLAY")
@@ -1233,7 +1233,7 @@ function ns.showSplash(onDone)
     title:SetTextColor(1, 0.82, 0)
     title:SetText("cro/x")
     title:SetPoint("TOP", 0, -24)
-    local sub = W.text(splash, "Combat Roleplay Options /x", "GameFontHighlightLarge")
+    local sub = W.text(splash, "Combat Roleplay Options", "GameFontHighlightLarge")
     sub:SetPoint("TOP", title, "BOTTOM", 0, -2)
     splash.who = W.text(splash, "", "GameFontHighlight")
     splash.who:SetPoint("TOP", sub, "BOTTOM", 0, -6)
