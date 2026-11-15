@@ -286,3 +286,21 @@ r = lua.eval('''function(ns)
   return {splash = CROX2SplashFrame:IsShown(), chatty = ns.cdb.chatty, done = ns.cdb.setupDone}
 end''')(ns)
 check("reset brings the splash back for setup", r["splash"] and r["chatty"] == 2 and r["done"] == False, r)
+
+# --- Alliance characters can switch the addon off, and back on
+H.me.faction = "Alliance"; ns.refreshProfile()
+r = lua.eval('''function(ns)
+  ns.cdb.alliance.disabled = false ns.cdb.on = true
+  ns.showAlliance()
+  local f = CROX2AllianceFrame
+  local c = f.art.check
+  c:SetChecked(true) c._scripts.OnClick[1](c)
+  local off = {disabled = ns.cdb.alliance.disabled, on = ns.cdb.on, hidden = not f:IsShown()}
+  ns.showAlliance()                                 -- /x again: the box shows as ticked
+  local ticked = c:GetChecked()
+  c:SetChecked(false) c._scripts.OnClick[1](c)
+  return {off = off, ticked = ticked, back = {disabled = ns.cdb.alliance.disabled, on = ns.cdb.on}}
+end''')(ns)
+check("Alliance: ticking the box turns the addon off and closes the screen", r["off"]["disabled"] and not r["off"]["on"] and r["off"]["hidden"])
+check("Alliance: /x shows the box ticked, unticking turns it back on", r["ticked"] and not r["back"]["disabled"] and r["back"]["on"])
+H.me.faction = "Horde"; ns.refreshProfile()

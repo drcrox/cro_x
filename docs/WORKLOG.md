@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.9 · 2026-11-15
+- Alliance screen: the Disable addon box is now a real toggle. Ticking it turns cro/x off for that character (no more screen at login); typing /x shows it ticked, and unticking turns it back on.
+
 ## 0.57-alpha2.8 · 2026-11-15
 - Options > Reset cro/x... (and /x reset): after a confirm, every option and choice goes back to the defaults, disabled lines come back on, and the splash returns for setup. Your own phrases are kept.
 

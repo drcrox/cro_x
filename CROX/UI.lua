@@ -101,8 +101,12 @@ local function allianceArt(parent, withCheckbox)
       if on then
         cdb().alliance.disabled = true
         cdb().on = false
-        p("off for this character. For the Horde!")
+        p("off for this character. For the Horde! Type /x and untick the box to bring it back.")
         parent:Hide()
+      else
+        cdb().alliance.disabled = false
+        cdb().on = true
+        p("back on for this character. The screen will show at login.")
       end
     end)
     c:SetPoint("BOTTOM", -100, 20)
