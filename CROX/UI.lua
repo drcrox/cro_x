@@ -334,6 +334,9 @@ local function buildOptions(parent)
     if ns.resetWindow then ns.resetWindow() end
   end)
   reset:SetPoint("TOPLEFT", 12, y - 4)
+  local resetAll = W.button(s, "Reset cro/x...", 130, function() ns.confirmReset() end)
+  resetAll:SetPoint("LEFT", reset, "RIGHT", 8, 0)
+  W.tooltip(resetAll, "Reset cro/x", "Puts every option and your character's choices back to the defaults and brings the splash page back to set up again. Your own phrases are kept. Same as /x reset.")
   y = y - 34
   local ver = W.hint(s, ("cro_x %s · built %s · /x help for commands"):format(ns.BUILD, ns.BUILD_DATE))
   ver:SetPoint("TOPLEFT", 12, y - 4)
@@ -999,6 +1002,40 @@ function ns.toggleMain()
   if main:IsShown() then main:Hide() else main:Show() end
 end
 
+-- Reset: back to defaults, then the splash again so setup starts over
+local resetDlg
+function ns.doReset()
+  ns.resetAll()
+  if main then main:Hide() end
+  if ns.resetWindow then pcall(ns.resetWindow) end
+  pcall(ns.updateMinimap)
+  pcall(ns.applyArt)
+  p("reset to the defaults.")
+  ns.showSplash()
+end
+function ns.confirmReset()
+  if ns.isAlliance() then return end
+  if not resetDlg then
+    resetDlg = W.panel("CROX2ResetFrame", "cro/x - reset everything?", 440, 220)
+    local page = CreateFrame("Frame", nil, resetDlg)
+    page:SetPoint("TOPLEFT", 8, -26)
+    page:SetPoint("BOTTOMRIGHT", -8, 8)
+    ns.paintArea(page, "page", 0.55)
+    local t = W.text(resetDlg, "This puts every cro/x option and your character's choices back to the defaults, " ..
+      "turns all lines back on, and brings the splash page back so you can set up again.", "GameFontHighlight")
+    t:SetPoint("TOPLEFT", 24, -44)
+    t:SetWidth(392)
+    t:SetWordWrap(true)
+    local keep = W.hint(resetDlg, "Your own phrases are kept.")
+    keep:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -10)
+    local go = W.button(resetDlg, "Reset everything", 140, function() resetDlg:Hide() ns.doReset() end)
+    go:SetPoint("BOTTOMLEFT", 24, 22)
+    local no = W.button(resetDlg, "Cancel", 90, function() resetDlg:Hide() end)
+    no:SetPoint("BOTTOMRIGHT", -24, 22)
+  end
+  resetDlg:Show()
+end
+
 -- open the main window on one section (character, options, phrases, lines, credits)
 function ns.openSection(key)
   if ns.isAlliance() then ns.showAlliance() return end
@@ -1064,7 +1101,7 @@ end
 ------------------------------------------------------------------------
 local function help()
   p("/x - open the window · /x flag - review a fight · /x export - copy your log · /x setup - redo setup")
-  p("/x art - pick the crest art · /x splash - show the splash page")
+  p("/x art - pick the crest art · /x splash - show the splash page · /x reset - start over")
   p("/x bug - report a problem · /x test - why was that press quiet?")
   p("/x on · /x off · /x help")
 end
@@ -1081,6 +1118,7 @@ SlashCmdList["CROX"] = function(msg)
   elseif msg == "setup" then ns.openSetup()
   elseif msg == "art" then ns.openArtPicker()
   elseif msg == "splash" then ns.showSplash()
+  elseif msg == "reset" then ns.confirmReset()
   elseif msg == "bug" or msg == "report" then ns.Bug.open()
   elseif msg == "test" then ns.Bug.test()
   elseif msg == "on" then ns.cdb.on = true p("on.")

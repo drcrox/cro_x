@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.8 · 2026-11-15
+- Options > Reset cro/x... (and /x reset): after a confirm, every option and choice goes back to the defaults, disabled lines come back on, and the splash returns for setup. Your own phrases are kept.
+
 ## 0.57-alpha2.7 · 2026-11-15
 - After the first setup is done, a small window offers "Choose lines", "Add my own lines" or "Not now". It appears once, not on later splashes.
 

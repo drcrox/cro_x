@@ -261,3 +261,28 @@ end''')(ns)
 check("after first setup, the next-step choice appears", r["shown"])
 check("it does not appear on later splashes", not r["again"])
 check("openSection opens the main window", r["main"])
+
+# --- reset everything
+r = lua.eval('''function(ns)
+  ns.cdb.chatty = 3 ns.cdb.temperament = "grim" ns.cdb.splash = false ns.cdb.off = {x = true} ns.cdb.setupDone = true
+  ns.cdb.custom = {{text = "mine", ch = "say"}}
+  ns.db.bg = 3
+  ns.confirmReset()
+  local shownDlg = CROX2ResetFrame:IsShown()
+  -- click the Reset button
+  for _, c in ipairs(CROX2ResetFrame._kids or {}) do end
+  ns.resetAll()
+  return {dlg = shownDlg, chatty = ns.cdb.chatty, temp = ns.cdb.temperament, splash = ns.cdb.splash, off = next(ns.cdb.off) == nil,
+    done = ns.cdb.setupDone, custom = #ns.cdb.custom, bg = ns.db.bg}
+end''')(ns)
+check("reset asks first", r["dlg"])
+check("reset restores defaults", r["chatty"] == 2 and r["temp"] == "gruff" and r["splash"] == True and r["off"] and r["done"] == False and r["bg"] is None)
+check("reset keeps your own phrases", r["custom"] == 1)
+G.SlashCmdList.CROX("reset"); check("/x reset opens the confirm", G.CROX2ResetFrame._shown)
+r = lua.eval('''function(ns)
+  CROX2SplashFrame:Hide() CROX2NextFrame:Hide()
+  ns.cdb.chatty = 3 ns.cdb.setupDone = true
+  ns.doReset()
+  return {splash = CROX2SplashFrame:IsShown(), chatty = ns.cdb.chatty, done = ns.cdb.setupDone}
+end''')(ns)
+check("reset brings the splash back for setup", r["splash"] and r["chatty"] == 2 and r["done"] == False, r)

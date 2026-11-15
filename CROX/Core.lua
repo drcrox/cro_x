@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.7"
+local BUILD = "0.57-alpha2.8"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -65,6 +65,17 @@ local function fillDefaults(t, d)
       if type(v) == "table" then local c = {} fillDefaults(c, v) t[k] = c else t[k] = v end
     end
   end
+end
+
+-- Put every setting and every choice back to the defaults (the player's own phrases and the recipe lists the
+-- game gave us are kept), clear the lines they switched off and the said-history, and mark setup as not done.
+function ns.resetAll()
+  if not cdb then return end
+  local keep = {custom = cdb.custom, recipes = cdb.recipes, recipeNames = cdb.recipeNames, alliance = cdb.alliance}
+  for k in pairs(cdb) do cdb[k] = nil end
+  fillDefaults(cdb, CHAR_DEFAULTS)
+  for k, v in pairs(keep) do cdb[k] = v end
+  for _, k in ipairs({"art", "bg", "page", "charBg"}) do db[k] = nil end
 end
 
 local function initDB()
