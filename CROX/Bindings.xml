@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="CROX2_FLAG" header="CROX2" category="ADDONS">
+    CROX2_FlagBinding()
+  </Binding>
+</Bindings>

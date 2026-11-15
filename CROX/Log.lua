@@ -1,0 +1,323 @@
+-- cro/x — session log, fight review (/x flag) and export (/x export). Second alpha.
+-- Everything stays on this computer, in the addon's saved file. Nothing is sent anywhere: a player who wants to
+-- help can paste the export into Discord, a form or an email. Other players' names are replaced by their class.
+
+local ADDON, ns = ...
+local W = ns.W
+local Log = {}
+ns.Log = Log
+
+local MAX_SESSIONS, MAX_FIGHTS, MAX_EVENTS = 3, 60, 400
+local session, fight
+local looseStart
+
+local function on() return ns.cdb and ns.cdb.logging end
+local function clock(sec) sec = math.floor(sec or 0) return ("%d:%02d"):format(sec / 60, sec % 60) end
+
+function Log.init()
+  local cdb = ns.cdb
+  cdb.log = cdb.log or {sessions = {}}
+  local s = cdb.log.sessions
+  session = {start = ns.wall(), version = ns.VERSION, fights = {}, loose = {}}
+  table.insert(s, session)
+  while #s > MAX_SESSIONS do table.remove(s, 1) end
+  looseStart = ns.now()
+end
+
+function Log.fightStart()
+  if not session then return end
+  fight = {start = ns.now(), wall = ns.wall(), events = {}, flags = {}}
+  table.insert(session.fights, fight)
+  while #session.fights > MAX_FIGHTS do table.remove(session.fights, 1) end
+end
+
+function Log.fightEnd()
+  if fight then
+    fight.dur = ns.now() - fight.start
+    -- name the fight after the first enemy it involved
+    for _, e in ipairs(fight.events) do
+      if e.target and not e.onAlly and not e.onSelf then fight.foe = e.target fight.foePlayer = e.tgtPlayer break end
+    end
+  end
+  fight = nil
+end
+
+local function add(e)
+  if not on() or not session then return end
+  local list = fight and fight.events or session.loose
+  e.t = ns.now() - (fight and fight.start or looseStart)
+  e.wall = ns.wall()
+  if #list < MAX_EVENTS then list[#list + 1] = e end
+end
+
+function Log.said(e) add(e) end
+function Log.event(e) add(e) end
+function Log.quiet(ctx, moment, why)
+  if not ns.inCombat then return end
+  add({kind = "quiet", moment = moment, ability = ctx and ctx.ability, item = ctx and ctx.itemName, why = why})
+end
+
+------------------------------------------------------------------------
+-- Plain words: "Warhorn said "..." when he used Mortal Strike on a Razormane Hunter."
+------------------------------------------------------------------------
+local MOMENT_WORDS = {
+  ["debuff:poisoned"] = "was poisoned", ["debuff:cursed"] = "was cursed", ["debuff:diseased"] = "caught a disease",
+  ["debuff:magic"] = "was hit by a spell", ["debuff:physical"] = "was hit by a debuff",
+  ["debuff:cc"] = "was stunned or held", ["debuff:frost"] = "was chilled",
+}
+
+local function subject()
+  local pr = ns.PRON[ns.cdb.pronouns] or ns.PRON.they
+  return ns.profile.name or "You", pr.they, pr.plural
+end
+
+function Log.describe(e, forExport)
+  local who, they, plural = subject()
+  local text = e.text or ""
+  if forExport and e.ally then
+    local a, b = text:find(e.ally, 1, true)
+    while a do
+      local rep = "[" .. (e.allyClass or "ally"):lower() .. "]"
+      text = text:sub(1, a - 1) .. rep .. text:sub(b + 1)
+      a, b = text:find(e.ally, a + #rep, true)
+    end
+  end
+  if forExport and e.own and not ns.cdb.includeOwn then text = "(one of your own lines)" end
+  local verb = e.channel == "EMOTE" and "emoted" or (e.channel == "YELL" and "yelled" or "said")
+  local quote = e.channel == "EMOTE" and ("\"" .. who .. " " .. text .. "\"") or ("\"" .. text .. "\"")
+  local target = e.target
+  if forExport and e.tgtPlayer then target = "an enemy player" end
+  local ally = e.ally
+  if forExport and ally then ally = "a " .. ((e.allyClass or "group member"):lower()) end
+  local was = plural and "were" or "was"
+  local when
+  local m = e.moment or ""
+  if e.kind == "call" then when = "when " .. they .. " called on " .. (ally or "a group member") .. " for help"
+  elseif e.kind == "reply" then when = "when " .. they .. " answered " .. (ally or "a group member")
+  elseif m == "kill" then when = "after " .. they .. " killed " .. (target or "the enemy")
+  elseif MOMENT_WORDS[m] then when = "when " .. they .. " " .. MOMENT_WORDS[m]:gsub("^was", was)
+  elseif m:find("^item:") then when = "when " .. they .. " used " .. (e.item or "an item")
+  elseif m:find("^gather:") then when = "while gathering"
+  elseif m:find("^craft:") then when = "after crafting"
+  elseif e.ability then
+    when = "when " .. they .. " used " .. e.ability
+    if target and not e.onSelf then when = when .. " on " .. target end
+  else when = "" end
+  local line = ("%s %s %s %s."):format(who, verb, quote, when)
+  return (line:gsub(" %.$", "."))
+end
+
+-- fights with at least one line said, newest first
+function Log.recentFights(n)
+  local out = {}
+  local sessions = ns.cdb and ns.cdb.log and ns.cdb.log.sessions or {}
+  for si = #sessions, 1, -1 do
+    local fs = sessions[si].fights
+    for fi = #fs, 1, -1 do
+      local f = fs[fi]
+      if f ~= fight then
+        for _, e in ipairs(f.events) do
+          if e.text then out[#out + 1] = f break end
+        end
+      end
+      if #out >= n then return out end
+    end
+  end
+  return out
+end
+
+------------------------------------------------------------------------
+-- Review a fight (/x flag)
+------------------------------------------------------------------------
+local REASONS = {{"fit", "Didn't fit"}, {"often", "Too often"}, {"wording", "Awkward wording"}, {"other", "Other"}}
+local review
+
+local function buildReview()
+  local f = W.panel("CROX2ReviewFrame", "cro/x - review a fight", 560, 440)
+  review = f
+  local which = 1
+  local fights = {}
+  local hint = W.hint(f, "Tick anything that felt wrong. A reason and a note are optional.")
+  hint:SetPoint("TOPLEFT", 16, -60)
+  local dd = W.dropdown(f, 260, function()
+    local items = {}
+    for i, fg in ipairs(fights) do
+      items[#items + 1] = {i, ("%s · %s%s"):format(i == 1 and "Last fight" or (i .. " fights ago"),
+        (fg.foe and (fg.foePlayer and "an enemy player" or fg.foe) or "unknown"),
+        fg.dur and (", " .. clock(fg.dur)) or "")}
+    end
+    return items
+  end, function() return which end, function(v) which = v f:fill() end)
+  dd:SetPoint("TOPLEFT", 0, -28)
+  local sf, content = W.scroll(f)
+  sf:SetPoint("TOPLEFT", 14, -80)
+  sf:SetPoint("BOTTOMRIGHT", -32, 44)
+  local rows = {}
+  local empty = W.hint(content, "No fights with lines yet. Fight something, then try again.")
+  empty:SetPoint("TOPLEFT", 4, -4)
+
+  local function row(i)
+    if rows[i] then return rows[i] end
+    local r = CreateFrame("Frame", nil, content)
+    r.check = W.check(r, "")
+    r.check:SetPoint("TOPLEFT", 0, 0)
+    r.txt = W.text(r, "", "GameFontHighlightSmall")
+    r.txt:SetPoint("TOPLEFT", 28, -5)
+    r.txt:SetWordWrap(true)
+    r.reason = W.dropdown(r, 130, function() return REASONS end,
+      function() local fl = r.fight and r.fight.flags[r.idx] return fl and fl.reason or "fit" end,
+      function(v) local fl = r.fight.flags[r.idx] if fl then fl.reason = v end end)
+    r.note = W.edit(r, 220, 120)
+    r.note:SetScript("OnTextChanged", function(self)
+      local fl = r.fight and r.fight.flags[r.idx]
+      if fl then fl.note = self:GetText() end
+    end)
+    r.check:SetScript("OnClick", function(self)
+      W.sound(self:GetChecked() and "check" or "uncheck")
+      if self:GetChecked() then r.fight.flags[r.idx] = r.fight.flags[r.idx] or {reason = "fit"}
+      else r.fight.flags[r.idx] = nil end
+      f:fill()
+    end)
+    rows[i] = r
+    return r
+  end
+
+  function f:fill()
+    fights = Log.recentFights(5)
+    if which > #fights then which = 1 end
+    dd.refresh()
+    local fg = fights[which]
+    for _, r in ipairs(rows) do r:Hide() end
+    empty:SetShown(not fg)
+    if not fg then return end
+    local y, n = 0, 0
+    local w = math.max(200, sf:GetWidth() - 8)
+    for idx, e in ipairs(fg.events) do
+      if e.text then
+        n = n + 1
+        local r = row(n)
+        r.fight, r.idx = fg, idx
+        r:ClearAllPoints()
+        r:SetPoint("TOPLEFT", 0, -y)
+        r:SetWidth(w)
+        r.txt:SetWidth(w - 32)
+        r.txt:SetText("|cff999999" .. clock(e.t) .. "|r  " .. Log.describe(e))
+        local flagged = fg.flags[idx] ~= nil
+        r.check:SetChecked(flagged)
+        local h = math.max(24, r.txt:GetStringHeight() + 10)
+        r.reason:ClearAllPoints()
+        r.note:ClearAllPoints()
+        if flagged then
+          r.reason:SetPoint("TOPLEFT", 12, -h + 2)
+          r.reason.refresh()
+          r.note:SetPoint("TOPLEFT", 190, -h - 2)
+          r.note:SetText(fg.flags[idx].note or "")
+          h = h + 32
+        end
+        r.reason:SetShown(flagged)
+        r.note:SetShown(flagged)
+        r:SetHeight(h)
+        r:Show()
+        y = y + h + 4
+      end
+    end
+    content:SetHeight(math.max(10, y))
+  end
+
+  local save = W.button(f, "Save flags", 120, function()
+    for _, fg in ipairs(fights) do
+      local any = false
+      for _ in pairs(fg.flags) do any = true break end
+      fg.flagged = any or nil
+    end
+    ns.p("flags saved. They go out with /x export.")
+    f:Hide()
+  end)
+  save:SetPoint("BOTTOMRIGHT", -16, 12)
+  local close = W.button(f, "Close", 90, function() f:Hide() end)
+  close:SetPoint("RIGHT", save, "LEFT", -6, 0)
+  f:SetScript("OnShow", function() f:fill() end)
+end
+
+function Log.openReview()
+  if not review then buildReview() end
+  if review:IsShown() then review:fill() else review:Show() end
+end
+
+------------------------------------------------------------------------
+-- Export (/x export)
+------------------------------------------------------------------------
+function Log.exportText()
+  local cdb, pf = ns.cdb, ns.profile
+  local out = {}
+  local function add(s) out[#out + 1] = s end
+  add(("cro/x export · v%s · %s"):format(ns.VERSION, date and date("%Y-%m-%d %H:%M") or ""))
+  add(("character: %s %s · temperament %s · homeland %s · upbringing %s · drive %s · chatty %d · filter %s"):format(
+    pf.race or "?", (pf.class or "?"):lower(), cdb.temperament or "?", (cdb.homeland or "none"):gsub("^home:", ""),
+    cdb.upbringing or "?", cdb.drive or "?", cdb.chatty or 2, cdb.filter and "on" or "off"))
+  local profs = {}
+  for k in pairs(pf.profs or {}) do profs[#profs + 1] = k end
+  local spec = {}
+  for k, v in pairs(pf.spec or {}) do spec[#spec + 1] = k .. " " .. v end
+  add("professions: " .. (#profs > 0 and table.concat(profs, ", ") or "none") .. " · spec bands: " ..
+    (#spec > 0 and table.concat(spec, ", ") or "none"))
+  for si, s in ipairs(cdb.log and cdb.log.sessions or {}) do
+    add("")
+    add(("== session %d · %s · v%s"):format(si, date and date("%Y-%m-%d %H:%M", s.start) or "", s.version or "?"))
+    for fi, fg in ipairs(s.fights) do
+      local said, quiet = 0, 0
+      for _, e in ipairs(fg.events) do if e.text then said = said + 1 elseif e.kind == "quiet" then quiet = quiet + 1 end end
+      add(("-- fight %d · %s · vs %s · %d said, %d quiet%s"):format(fi, clock(fg.dur), fg.foePlayer and "an enemy player"
+        or (fg.foe or "?"), said, quiet, fg.flagged and " · FLAGGED" or ""))
+      for idx, e in ipairs(fg.events) do
+        if e.text then
+          local fl = fg.flags and fg.flags[idx]
+          local reason
+          if fl then for _, r in ipairs(REASONS) do if r[1] == fl.reason then reason = r[2] end end end
+          add(("  %s %s | %s%s"):format(clock(e.t), Log.describe(e, true), e.moment or "", fl and
+            (" | FLAG: " .. (reason or "?") .. ((fl.note and fl.note ~= "") and (" - " .. fl.note) or "")) or ""))
+        elseif e.kind == "quiet" then
+          add(("  %s quiet | %s | %s | %s"):format(clock(e.t), e.moment or "-", e.ability or e.item or "-", e.why or "-"))
+        elseif e.kind == "kill" then
+          add(("  %s kill"):format(clock(e.t)))
+        end
+      end
+    end
+    if #s.loose > 0 then
+      add("-- out of combat")
+      for _, e in ipairs(s.loose) do if e.text then add("  " .. Log.describe(e, true) .. " | " .. (e.moment or "")) end end
+    end
+  end
+  return table.concat(out, "\n")
+end
+
+local exportFrame
+function Log.openExport()
+  if not exportFrame then
+    local f = W.panel("CROX2ExportFrame", "cro/x - export", 600, 460)
+    exportFrame = f
+    local hint = W.hint(f, "Everything below is selected. Copy it (Ctrl+C) and paste it into Discord, a form or an email.")
+    hint:SetPoint("TOPLEFT", 16, -32)
+    hint:SetPoint("RIGHT", -16, 0)
+    local sf = W.make("ScrollFrame", f, {"UIPanelScrollFrameTemplate"}, "CROX2ExportScroll")
+    sf:SetPoint("TOPLEFT", 14, -54)
+    sf:SetPoint("BOTTOMRIGHT", -32, 44)
+    local eb = CreateFrame("EditBox", nil, sf)
+    eb:SetMultiLine(true)
+    eb:SetAutoFocus(false)
+    eb:SetFontObject("ChatFontNormal")
+    eb:SetWidth(540)
+    eb:SetMaxLetters(0)
+    eb:SetScript("OnEscapePressed", function() f:Hide() end)
+    sf:SetScrollChild(eb)
+    f.eb = eb
+    local sel = W.button(f, "Select all", 110, function() eb:SetFocus() eb:HighlightText() end)
+    sel:SetPoint("BOTTOMRIGHT", -16, 12)
+    local close = W.button(f, "Close", 90, function() f:Hide() end)
+    close:SetPoint("RIGHT", sel, "LEFT", -6, 0)
+  end
+  exportFrame:Show()
+  exportFrame.eb:SetText(Log.exportText())
+  exportFrame.eb:SetFocus()
+  exportFrame.eb:HighlightText()
+end
