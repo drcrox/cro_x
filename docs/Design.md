@@ -217,3 +217,4 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 - **Splash header and title card (2026-11-15):** the splash is built on the same window frame as the main window, so it has the real title bar ("Combat Roleplay Options - cro/x" with the crest at left and the close button at right, drag by the title), and a title card ("Combat Roleplay Options" in the large decorative font between gold rules) above the character dropdowns, so people know which addon it is.
 - **Splash is resizable (2026-11-15):** drag the corner grip (minimum 540x440); the choices plate widens with it, the poster stays whole, the size is remembered, and the splash won't auto-close while it's being resized.
 - **Splash heading (2026-11-15):** the choices plate is headed "Who are you?".
+- **Splash options centered (2026-11-15):** the "Who are you?" heading and the five choices sit in one group centered in the plate, so they stay centered when the splash is resized.

@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.24 · 2026-11-15
+- splash options centered
+
 ## 0.57-alpha2.23 · 2026-11-15
 - splash uses the real main-window title bar; plate heading 'Who are you?'
 

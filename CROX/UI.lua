@@ -1454,17 +1454,21 @@ function ns.showSplash(onDone)
     pt:SetAllPoints()
     pt:SetColorTexture(0, 0, 0, 0.62)
     local head = W.heading(plate, "Who are you?")
-    head:SetPoint("TOPLEFT", 14, -10)
+    head:SetPoint("TOP", plate, "TOP", 0, -10)
+    -- the rows sit in one group that stays centered in the plate, however wide the window is
+    local grp = CreateFrame("Frame", nil, plate)
+    grp:SetSize(440, #CHOICES * 34)
+    grp:SetPoint("TOP", plate, "TOP", 0, -34)
     splash.dds = {}
     for i, ch in ipairs(CHOICES) do
       local kind = ch[1]
-      local y = -34 - (i - 1) * 34
-      local label = W.text(plate, ch[2], "GameFontNormal")
-      label:SetPoint("TOPLEFT", 16, y - 6)
-      local dd = W.dropdown(plate, 170, function() return choiceItems(kind) end, function() return cdb()[kind] end,
+      local y = -(i - 1) * 34
+      local label = W.text(grp, ch[2], "GameFontNormal")
+      label:SetPoint("TOPLEFT", 0, y - 6)
+      local dd = W.dropdown(grp, 170, function() return choiceItems(kind) end, function() return cdb()[kind] end,
         function(v) cdb()[kind] = v splash:refreshChoices() end)
-      dd:SetPoint("TOPLEFT", 116, y + 2)
-      local hint = W.text(plate, SPLASH_HINTS[kind] or "", "GameFontDisableSmall")
+      dd:SetPoint("TOPLEFT", 100, y + 2)
+      local hint = W.text(grp, SPLASH_HINTS[kind] or "", "GameFontDisableSmall")
       hint:SetPoint("LEFT", dd, "RIGHT", -6, 2)
       splash.dds[kind] = dd
     end
