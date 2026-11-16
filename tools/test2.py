@@ -141,38 +141,38 @@ clicks = lua.eval('''function(H)
   end
   return table.concat(done, ",") end''')
 r = clicks(H); check("all four sections open at two sizes", r == "Setup,Options,My phrases,Lines,Commands,Credits", r)
-# --- lines tab: shows every line by default, tick boxes to combine sets
+# --- lines tab: folio tabs by group, a row of tabs inside the group, and other classes' lines to look at
 lt = lua.eval('''function(ns)
   local s = ns._sections.lines
   local st = s._state
-  local function count() s:refresh() local n = 0 for _, r in ipairs(s.rows) do if r:IsShown() then n = n + 1 end end
-    return s.count._text or "" end
+  local function count() s:refresh() return s.count._text or "" end
   local out = {}
-  out.default = count()
-  out.defaultMoments = next(st.moments) == nil and next(st.sources) == nil and st.onlyMine == nil
   st.limit = 100000
-  st.moments = {opener = true}; out.opener = count()
-  st.moments = {opener = true, heavy = true}; out.two = count()
-  st.moments = {}; st.sources = {class = true}; out.class = count()
-  st.sources = {class = true, spec = true}; out.classSpec = count()
-  st.moments = {kill = true}; st.sources = {base = true}; out.killBase = count()
-  st.moments = {opener = true}; st.sources = {base = true}; s:refresh()
+  s:pickTab("all"); out.default = count()
+  out.defaultMoments = next(st.moments) == nil and st.view == "mine"
+  s:pickTab("attacks", "opener"); out.opener = count()
+  s:pickTab("attacks"); out.attacks = count()
+  s:pickTab("kill"); out.kill = count()
+  s:pickTab("attacks", "opener"); s:refresh()
   out.trigOpener = s.rows[1] and s.rows[1].trig._text or "none"
-  st.moments = {kill = true}; s:refresh(); out.trigKill = s.rows[1] and s.rows[1].trig._text or "none"
-  st.moments = {}; st.sources = {}; st.search = "zzzzqq"; out.none = count()
-  st.search = ""; s.picker:Show(); s:refresh(); out.openOk = s.picker:IsShown() and s.picker:GetWidth() > 350 and s.picker:GetWidth() < 450 and s.picker.mBoxes[1].__pts == nil
-  s.picker:SetSize(800, 500); local sc = s.picker._scripts and s.picker._scripts.OnSizeChanged; if sc then sc[1](s.picker) end
-  s.picker:SetSize(250, 500); if sc then sc[1](s.picker) end
-  s.picker:Hide(); st.limit = 100; s:refresh()
+  s:pickTab("kill"); s:refresh(); out.trigKill = s.rows[1] and s.rows[1].trig._text or "none"
+  local shown = 0
+  for _, b in ipairs(s.tabs) do if b:IsShown() then shown = shown + 1 end end
+  out.tabs = shown
+  s:pickTab("items"); s:refresh()
+  local subs = 0
+  for _, b in ipairs(s.subs) do if b:IsShown() then subs = subs + 1 end end
+  out.itemSubs = subs
+  s:pickTab("all"); st.search = "zzzzqq"; out.none = count()
+  st.search = ""; st.limit = 100; s:pickTab("all")
   return out end''')(ns)
 def n_of(t): return int(str(t).split(" ")[0])
-check("lines tab starts with every moment and source, and has no switch to show lines the character cannot say", lt["defaultMoments"], lt["default"])
-check("lines tab default shows the whole set", n_of(lt["default"]) > n_of(lt["opener"]) > 0, (lt["default"], lt["opener"]))
-check("two moments combine (more than one, fewer than all)", n_of(lt["two"]) > n_of(lt["opener"]) and n_of(lt["two"]) < n_of(lt["default"]), (lt["opener"], lt["two"]))
-check("two sources combine", n_of(lt["classSpec"]) > n_of(lt["class"]) > 0, (lt["class"], lt["classSpec"]))
-check("moment and source filters combine", 0 < n_of(lt["killBase"]) < n_of(lt["default"]), lt["killBase"])
+check("lines tab opens on All, with no way to show lines the character cannot say", lt["defaultMoments"], lt["default"])
+check("the All tab shows the whole set", n_of(lt["default"]) > n_of(lt["attacks"]) > n_of(lt["opener"]) > 0, (lt["default"], lt["attacks"], lt["opener"]))
+check("a group tab holds several moments and its sub-tab narrows to one", n_of(lt["attacks"]) > n_of(lt["opener"]) and n_of(lt["kill"]) > 0, (lt["attacks"], lt["opener"], lt["kill"]))
+check("ten folio tabs, and the Items tab has a sub-tab per item", lt["tabs"] == 10 and lt["itemSubs"] == 12, (lt["tabs"], lt["itemSubs"]))
 check("each line says what can trigger it (abilities for an archetype, plain words for a kill)", "Charge" in lt["trigOpener"] and "Intercept" in lt["trigOpener"] and lt["trigOpener"].startswith("Can trigger on:") and "killing an enemy" in lt["trigKill"], (lt["trigOpener"], lt["trigKill"]))
-check("search with no match shows none; panel opens", n_of(lt["none"]) == 0 and lt["openOk"], lt["none"])
+check("search with no match shows none", n_of(lt["none"]) == 0, lt["none"])
 
 # tabs
 tab2 = G.CROX2MainFrameTab2
@@ -566,8 +566,8 @@ check("a locked line cannot be switched on or off", r["offSame"])
 r = lua.eval('''function(ns)
   ns.openSection("lines")
   local L = ns._sections.lines
-  L._state.view = "others" L._state.sources = {} L._state.moments = {} L._state.limit = 800
-  L:refresh()
+  L._state.limit = 800
+  L:pickTab("others")
   local out = {count = L.count._text}
   local n, own, sameOff = 0, 0, true
   local before = 0 for _ in pairs(ns.cdb.off) do before = before + 1 end
@@ -583,8 +583,8 @@ r = lua.eval('''function(ns)
   end
   local after = 0 for _ in pairs(ns.cdb.off) do after = after + 1 end
   out.n, out.own, out.same = n, own, before == after
-  L._state.view = "mine" L._state.limit = 100
-  L:refresh()
+  L._state.limit = 100
+  L:pickTab("all")
   return out
 end''')(ns)
 check("other classes' lines are listed in their own view", r["n"] > 0 and "other classes" in r["count"], r)

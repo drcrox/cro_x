@@ -268,3 +268,7 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 
 ### Other classes' lines (0.57-alpha2.43)
 - The Lines tab has two views: **Your lines** (the default) and **Other classes**. The second lists other classes' tag lines and spec lines, greyed, unchecked, with "<Class> only - not available to this character". They can't be switched on, they are never said, and the moment, source and search filters still apply. Lines blocked by temperament or race stay hidden in both views.
+
+### Lines page: folio tabs (0.57-alpha2.44)
+- The checkbox chooser window is gone. The Lines page now has a row of folio tabs: All, Attacks, Control, Defense & healing, Support, After a kill, Debuffs, Items, Group & extras, and Other classes. Under the group row, a smaller row of tabs picks one moment inside the group ("All items", Healing potion, Mana potion...), or one class under Other classes. Tabs wrap to the width of the window. One tab is open at a time; the search box narrows inside it, and the source filter is gone with the chooser.
+- Other classes' lines (greyed, view-only, never said) are the Other classes tab, one sub-tab per class. Locked spec lines of your own class still show after the lines you can say, checked but greyed.

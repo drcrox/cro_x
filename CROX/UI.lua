@@ -894,30 +894,118 @@ local function buildLines(parent)
   for _, l in ipairs({ARCH_LIST, MOMENT_LIST, EXTRA_LIST}) do for _, it in ipairs(l) do momentItems[#momentItems + 1] = it end end
   local function changed() state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end
 
-  -- the set chooser
-  local toggle = W.button(s, "", 250, function()
-    local pn = s.picker
-    if pn:IsShown() then pn:Hide()
-    else
-      state.open = true
-      pn:ClearAllPoints()
-      -- open where the mouse pointer is (the screen keeps it fully visible); under the button if that can't be read
-      local cx, cy = 0, 0
-      if GetCursorPosition then cx, cy = GetCursorPosition() end
-      local sc = (UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()) or 1
-      if cx and cy and cx > 0 and cy > 0 and sc > 0 then
-        pn:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", cx / sc - 16, cy / sc + 14)
-      else
-        pn:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -4)
-      end
-      pn:Show()
+  -- folio tabs: a row of group tabs, and under it a row of tabs for the moments (or classes) inside the group
+  local GROUPS = {
+    {"all", "All"},
+    {"attacks", "Attacks", {"opener", "filler", "heavy", "area", "upkeep", "reactive", "finisher"}},
+    {"control", "Control", {"interrupt", "lockdown", "snare", "weaken", "taunt"}},
+    {"defense", "Defense & healing", {"guard", "laststand", "escape", "heal", "ward", "groupheal", "clutch", "cleanse", "raise"}},
+    {"support", "Support", {"rally", "powerup", "bless", "summon", "sneak"}},
+    {"kill", "After a kill", {"kill"}},
+    {"debuffs", "Debuffs", {"debuff:poisoned", "debuff:cursed", "debuff:diseased", "debuff:magic", "debuff:physical", "debuff:cc"}},
+    {"items", "Items", {"item:potion", "item:healing", "item:mana", "item:rage", "item:bandage", "item:food", "item:drink",
+      "item:elixir", "item:flask", "item:scroll", "item:explosives"}},
+    {"extras", "Group & extras", {"x:cr", "x:dmg", "x:profemote"}},
+    {"others", "Other classes"},
+  }
+  state.group, state.sub, state.cls = "all", nil, nil
+  local function groupDef(k) for _, g in ipairs(GROUPS) do if g[1] == k then return g end end end
+  local function classList()
+    local l = {}
+    for cls in pairs(CROX2_SPEC or {}) do if cls ~= (ns.profile and ns.profile.class) then l[#l + 1] = cls end end
+    table.sort(l)
+    return l
+  end
+  -- what the current tabs mean for the line filters
+  local function applyTabs()
+    state.moments, state.sources = {}, {}
+    state.view = state.group == "others" and "others" or "mine"
+    local g = groupDef(state.group)
+    if g and g[3] then
+      if state.sub then state.moments[state.sub] = true
+      else for _, k in ipairs(g[3]) do state.moments[k] = true end end
     end
-  end)
-  toggle:SetPoint("TOPLEFT", 4, 0)
-  W.tooltip(toggle, "Choose sets of lines", "Opens checkboxes for moments (opener, kill, potions...) and sources (baseline, class, drive, spec...). " ..
-    "Tick as many as you like, in any combination. With nothing ticked, every line shows.")
-  local search = W.edit(s, 170)
-  search:SetPoint("LEFT", toggle, "RIGHT", 14, 0)
+  end
+
+  local function folioTab(small)
+    local b = CreateFrame("Button", nil, s)
+    b:SetHeight(small and 20 or 26)
+    b.bg = b:CreateTexture(nil, "BACKGROUND")
+    b.bg:SetAllPoints()
+    b.top = b:CreateTexture(nil, "ARTWORK")
+    b.top:SetPoint("TOPLEFT", 0, 0)
+    b.top:SetPoint("TOPRIGHT", 0, 0)
+    b.top:SetHeight(2)
+    b.label = b:CreateFontString(nil, "OVERLAY", small and "GameFontHighlightSmall" or "GameFontNormalSmall")
+    b.label:SetPoint("CENTER", 0, -1)
+    function b:setLabel(t) self.label:SetText(t) self:SetWidth(math.max(40, (self.label:GetStringWidth() or 40) + 22)) end
+    function b:setActive(on)
+      self.active = on
+      if on then
+        self.bg:SetColorTexture(0.18, 0.14, 0.06, 0.95)
+        self.top:SetColorTexture(0.9, 0.72, 0.2, 1)
+        self.label:SetTextColor(1, 0.82, 0)
+      else
+        self.bg:SetColorTexture(0, 0, 0, 0.55)
+        self.top:SetColorTexture(0.35, 0.3, 0.2, 0.8)
+        self.label:SetTextColor(0.75, 0.75, 0.75)
+      end
+    end
+    b:SetScript("OnEnter", function(self) if not self.active then self.bg:SetColorTexture(0.12, 0.1, 0.06, 0.8) end end)
+    b:SetScript("OnLeave", function(self) self:setActive(self.active) end)
+    return b
+  end
+  s.tabs, s.subs = {}, {}
+  local function flowTabs(pool, specs, activeKey, y, w, small)
+    local x, rowH = 4, small and 22 or 28
+    local rows = 1
+    for i, sp in ipairs(specs) do
+      local b = pool[i]
+      if not b then b = folioTab(small) pool[i] = b end
+      b:setLabel(sp[2])
+      b:setActive(sp[1] == activeKey)
+      b:SetScript("OnClick", function() W.sound("click") sp.pick() end)
+      local bw = b:GetWidth()
+      if x + bw > w - 6 and x > 4 then x = 4 rows = rows + 1 end
+      b:ClearAllPoints()
+      b:SetPoint("TOPLEFT", x, y - (rows - 1) * rowH)
+      b:Show()
+      x = x + bw + 3
+    end
+    for i = #specs + 1, #pool do pool[i]:Hide() end
+    return y - rows * rowH
+  end
+  -- places both rows for the width given and returns how tall the header is
+  function s:flowHeader(w)
+    local gspecs = {}
+    for _, g in ipairs(GROUPS) do
+      gspecs[#gspecs + 1] = {g[1], g[2], pick = function()
+        state.group, state.sub, state.cls = g[1], nil, nil
+        applyTabs() state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end
+      end}
+    end
+    local y = flowTabs(self.tabs, gspecs, state.group, 0, w, false)
+    local sspecs = {}
+    local g = groupDef(state.group)
+    local active
+    if state.group == "others" then
+      sspecs[1] = {"*", "All classes", pick = function() state.cls = nil state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end}
+      for _, cls in ipairs(classList()) do
+        sspecs[#sspecs + 1] = {cls, cap(cls:lower()), pick = function() state.cls = cls state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end}
+      end
+      active = state.cls or "*"
+    elseif g and g[3] and #g[3] > 1 then
+      sspecs[1] = {"*", "All " .. g[2]:lower(), pick = function() state.sub = nil applyTabs() state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end}
+      for _, k in ipairs(g[3]) do
+        sspecs[#sspecs + 1] = {k, momentLabel(k), pick = function() state.sub = k applyTabs() state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end}
+      end
+      active = state.sub or "*"
+    end
+    if #sspecs > 0 then y = flowTabs(self.subs, sspecs, active, y - 2, w, true)
+    else for _, b in ipairs(self.subs) do b:Hide() end end
+    return -y + 4
+  end
+  local search = W.edit(s, 190)
   local ph = W.hint(search, "Search lines")
   ph:SetPoint("LEFT", 2, 0)
   search:SetScript("OnTextChanged", function(self)
@@ -925,83 +1013,15 @@ local function buildLines(parent)
     ph:SetShown(state.search == "")
     changed()
   end)
-  -- two views: the character's own lines (with the spec lines still to unlock), and other classes' lines to look at
-  local viewBtns = {}
-  local function setView(v) state.view = v changed() end
-  viewBtns.mine = W.button(s, "Your lines", 110, function() setView("mine") end)
-  viewBtns.mine:SetPoint("TOPLEFT", 4, -28)
-  viewBtns.others = W.button(s, "Other classes", 120, function() setView("others") end)
-  viewBtns.others:SetPoint("LEFT", viewBtns.mine, "RIGHT", 4, 0)
-  W.tooltip(viewBtns.others, "Other classes", "Class tag lines and spec lines that belong to other classes, greyed out. Only to look at: your character can't say them and they can't be switched on.")
-  s.viewBtns = viewBtns
-  -- the chooser is its own window that pops out at the pointer; it can be resized, and the checkboxes flow into
-  -- as many columns as fit (two by default)
-  local ROWH, COLW = 24, 172
-  local saved = ns.db and ns.db.pickerSize
-  local panel = W.panel("CROX2LinesPicker", "Choose sets of lines",
-    saved and saved[1] or 2 * COLW + 56, saved and saved[2] or 470)
-  panel:SetResizable(true)
-  if panel.SetResizeBounds then panel:SetResizeBounds(2 * 100 + 56, 240, 1000, 900)
-  elseif panel.SetMinResize then panel:SetMinResize(256, 240) panel:SetMaxResize(1000, 900) end
-  local sf, content = W.scroll(panel)
-  sf:SetPoint("TOPLEFT", 10, -30)
-  sf:SetPoint("BOTTOMRIGHT", -30, 74)
-  panel.mBoxes, panel.sBoxes = {}, {}
-  local mHead = W.heading(content, "Moments")
-  for _, it in ipairs(momentItems) do
-    local key = it[1]
-    panel.mBoxes[#panel.mBoxes + 1] = W.check(content, it[2], function(_, on) state.moments[key] = on or nil changed() end)
+  s.search = search
+  applyTabs()
+  -- open a tab by name (the tabs call this; the tests do too)
+  function s:pickTab(group, sub)
+    state.group, state.sub, state.cls = group, sub, nil
+    applyTabs()
+    state.limit = 100
+    self:refresh()
   end
-  local sHead = W.heading(content, "Sources and tags")
-  for _, it in ipairs(SOURCE_LIST) do
-    local key = it[1]
-    panel.sBoxes[#panel.sBoxes + 1] = W.check(content, it[2], function(_, on) state.sources[key] = on or nil changed() end)
-  end
-  local function flow()
-    local w = panel:GetWidth() or (2 * COLW + 56)
-    local cols = math.max(1, math.floor((w - 52) / COLW))
-    local y = -2
-    local function place(head, boxes)
-      head:ClearAllPoints() head:SetPoint("TOPLEFT", 4, y)
-      y = y - 24
-      for i, c in ipairs(boxes) do
-        c:ClearAllPoints()
-        c:SetPoint("TOPLEFT", ((i - 1) % cols) * COLW, y - math.floor((i - 1) / cols) * ROWH)
-      end
-      y = y - math.ceil(#boxes / cols) * ROWH - 10
-    end
-    place(mHead, panel.mBoxes)
-    place(sHead, panel.sBoxes)
-    content:SetHeight(-y + 8)
-  end
-  panel:SetScript("OnSizeChanged", function() flow() end)
-  flow()
-  local grip = CreateFrame("Button", nil, panel)
-  grip:SetSize(16, 16)
-  grip:SetPoint("BOTTOMRIGHT", -4, 4)
-  grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-  grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-  grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-  grip:SetScript("OnMouseDown", function() panel:StartSizing("BOTTOMRIGHT") end)
-  grip:SetScript("OnMouseUp", function()
-    panel:StopMovingOrSizing()
-    flow()
-    if ns.db then ns.db.pickerSize = {math.floor(panel:GetWidth() + 0.5), math.floor(panel:GetHeight() + 0.5)} end
-  end)
-  panel.note = W.hint(panel, "Nothing ticked shows every line.")
-  panel.note:SetPoint("BOTTOMLEFT", 14, 48)
-  panel.clear = W.button(panel, "Clear ticks", 120, function()
-    state.moments, state.sources = {}, {}
-    for _, c in ipairs(panel.mBoxes) do c:SetChecked(false) end
-    for _, c in ipairs(panel.sBoxes) do c:SetChecked(false) end
-    changed()
-  end)
-  panel.clear:SetPoint("BOTTOMLEFT", 12, 14)
-  panel.done = W.button(panel, "Done", 90, function() panel:Hide() end)
-  panel.done:SetPoint("BOTTOMRIGHT", -28, 14)
-  panel:HookScript("OnHide", function() state.open = false end)
-  s:SetScript("OnHide", function() panel:Hide() end)
-  s.picker = panel
 
   s.count = W.heading(s, "")
   s.rows = {}
@@ -1068,9 +1088,9 @@ local function buildLines(parent)
   end
 
   function s:refresh()
-    toggle:SetText(("Sets: %s · %s"):format(
-      next(state.moments) and (countKeys(state.moments) .. " moment" .. (countKeys(state.moments) == 1 and "" or "s")) or "all moments",
-      next(state.sources) and (countKeys(state.sources) .. " source" .. (countKeys(state.sources) == 1 and "" or "s")) or "all sources"))
+    local hdr = self:flowHeader(self.w or 600)
+    self.search:ClearAllPoints()
+    self.search:SetPoint("TOPRIGHT", self, "TOPRIGHT", -8, -(hdr + 4))
     local trigCache = {}
     local function trigger(o)
       local names, seen, plain = {}, {}, {}
@@ -1107,7 +1127,7 @@ local function buildLines(parent)
         if state.view == "others" then
           -- another class's tag or spec lines (anything else that is blocked stays hidden)
           local cls = o.cls or o.id:match("^tag:class:([^|]+)")
-          if cls and cls ~= ns.profile.class and canSay(o, "other") then o.locked, o.other = true, cls shown[#shown + 1] = o end
+          if cls and cls ~= ns.profile.class and (not state.cls or cls == state.cls) and canSay(o, "other") then o.locked, o.other = true, cls shown[#shown + 1] = o end
         elseif canSay(o) then shown[#shown + 1] = o
         elseif o.cls and o.cls == ns.profile.class and canSay(o, "spec") then o.locked = true locked[#locked + 1] = o end    -- a spec line you could unlock
       end
@@ -1120,11 +1140,10 @@ local function buildLines(parent)
       self.count:SetText(("%d line%s your character can say%s"):format(sayable, sayable == 1 and "" or "s",
         #locked > 0 and (" · " .. #locked .. " more to unlock") or ""))
     end
-    for k, b in pairs(self.viewBtns) do if b.SetEnabled then b:SetEnabled(state.view ~= k) end end
     self.count:ClearAllPoints()
-    self.count:SetPoint("TOPLEFT", 8, -58)
+    self.count:SetPoint("TOPLEFT", 8, -(hdr + 8))
     for _, r in ipairs(self.rows) do r:Hide() end
-    local y = -82
+    local y = -(hdr + 32)
     local limit = math.min(#shown, state.limit)
     for i = 1, limit do
       local o = shown[i]
@@ -1179,6 +1198,7 @@ local function buildLines(parent)
   end
   function s:layout(w)
     for _, r in ipairs(self.rows) do r.txt:SetWidth(w - 100) r.sub:SetWidth(w - 100) r.trig:SetWidth(w - 100) end
+    if self.w ~= w then self.w = w self:refresh() end          -- the tabs wrap to the width
     return self.height or 200
   end
   s._state = state

@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.44 · 2026-11-15
+- Lines page as folio tabs
+
 ## 0.57-alpha2.43 · 2026-11-15
 - Other classes' lines in their own greyed view
 
