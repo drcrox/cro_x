@@ -470,7 +470,11 @@ local function buildOptions(parent)
   head("General")
   check("on", "cro/x on for this character", "The master switch for this character. Everything about how it speaks is on the Setup page.")
   head("Content")
-  check("profLines", "Profession lines", "Lines and emotes about your professions (cooking, mining, and so on), when you use food, potions or gather. Off: your professions are never mentioned.")
+  check("profLines", "Profession combat lines", "Lines about your professions that come up in a fight or when you use items (cooking on food, alchemy on potions, engineering on explosives, blacksmithing on heavy hits and so on), plus the emotes for gathering and crafting. Off: your professions are never mentioned.")
+  local profBtn = W.button(s, "Sample profession lines...", 190, function() ns.openProfSamples() end)
+  profBtn:SetPoint("TOPLEFT", 36, y + 2)
+  W.tooltip(profBtn, "Sample profession lines", "Shows a few examples for the professions this character has, and what each would trigger on.")
+  y = y - 28
   local media = W.check(s, "Media references (a later build)", function(self)
     self:SetChecked(false)
     p("media references come in a later build.")
@@ -835,6 +839,8 @@ local SOURCE_LIST = {
   {"class", "Tag: class"}, {"spec", "Spec lines"}, {"prof", "Professions"}, {"cr", "Call and response"},
   {"dmg", "Damage types"}, {"profemote", "Profession emotes"}, {"own", "My own lines"},
 }
+local CHIP_LABEL = {base = "Baseline", drive = "Drive", up = "Upbringing", home = "Homeland", class = "Class",
+  spec = "Spec", prof = "Professions", cr = "Call and response", dmg = "Damage types", profemote = "Profession emotes", own = "My lines"}
 local function sourceKind(o)
   if o.own then return "own" end
   if o.cls then return "spec" end
@@ -882,6 +888,126 @@ local function triggersFor(moment)
   end
   table.sort(names)
   return names
+end
+
+------------------------------------------------------------------------
+-- Profession line samples: examples for the professions the character has, and what each would trigger on
+------------------------------------------------------------------------
+local PROF_NAME = {first_aid = "First Aid"}
+local function profLabel(k) return PROF_NAME[k] or cap(k) end
+local function shuffle(t)
+  for i = #t, 2, -1 do local j = math.random(i) t[i], t[j] = t[j], t[i] end
+  return t
+end
+-- plain words for what sets a profession line off
+local function profTrigger(line)
+  local parts, items, arch = {}, {}, {}
+  for _, m in ipairs(line.a or {}) do
+    if m:find("^item:") then items[#items + 1] = (momentLabel(m):lower():gsub("^any ", "a "))
+    else arch[#arch + 1] = m end
+  end
+  if #items > 0 then parts[#parts + 1] = "using " .. table.concat(items, ", ") .. " (about half the time you do, if you have the profession)" end
+  for _, m in ipairs(arch) do
+    local names = triggersFor(m)
+    if names and #names > 0 then
+      local shown = {}
+      for i = 1, math.min(5, #names) do shown[i] = names[i] end
+      parts[#parts + 1] = ("%s abilities: %s%s - now and then, mixed in with your other lines for that moment"):format(
+        momentLabel(m):lower(), table.concat(shown, ", "), #names > 5 and (" +" .. (#names - 5) .. " more") or "")
+    else
+      parts[#parts + 1] = momentLabel(m):lower() .. " moments (none of your current abilities set this off)"
+    end
+  end
+  if #parts == 0 then parts[1] = "any moment, now and then, mixed in with your other lines" end
+  local when = {}
+  for _, tok in ipairs(line.m or {}) do
+    if tok == "recipe" then when[#when + 1] = "only for an item you can make yourself"
+    elseif tok == "fish" then when[#when + 1] = "only for fish"
+    elseif tok == "recipe:weapon" then when[#when + 1] = "only while you wield something you made"
+    elseif tok == "recipe:armor" then when[#when + 1] = "only while you wear something you made" end
+  end
+  if line.rare then when[#when + 1] = "rarely" end
+  return table.concat(parts, "; ") .. (#when > 0 and (" (" .. table.concat(when, ", ") .. ")") or "")
+end
+
+function ns.profSampleText(perProf)
+  perProf = perProf or 3
+  local pf = ns.profile or {}
+  local keys = {}
+  for k in pairs(pf.profs or {}) do keys[#keys + 1] = k end
+  table.sort(keys)
+  local out = {}
+  if cdb().profLines == false then
+    out[#out + 1] = "|cffcc9933Profession combat lines are switched off in Options.|r These are what would be said if you switched them on.\n"
+  end
+  if #keys == 0 then
+    out[#out + 1] = "cro/x does not see any professions on this character. It reads them from your skills when you log in or when your skills change."
+    return table.concat(out, "\n"), 0
+  end
+  local n = 0
+  for _, k in ipairs(keys) do
+    local pool = {}
+    for _, line in ipairs(CROX2_TAGS["prof:" .. k] or {}) do
+      if canSay({id = "tag:prof:" .. k .. "|" .. line.t, line = line}) then pool[#pool + 1] = line end
+    end
+    shuffle(pool)
+    out[#out + 1] = "|cffffd100" .. profLabel(k) .. "|r"
+    if #pool == 0 and not (CROX2_PROF_EMOTES and (CROX2_PROF_EMOTES["gather:" .. k] or CROX2_PROF_EMOTES["craft:" .. k])) then
+      out[#out + 1] = "  |cff999999No lines for this profession yet.|r"
+    end
+    for i = 1, math.min(perProf, #pool) do
+      local line = pool[i]
+      out[#out + 1] = "  \"" .. line.t .. "\""
+      out[#out + 1] = "    |cff999999Triggers on: " .. profTrigger(line) .. "|r"
+      n = n + 1
+    end
+    for _, kind in ipairs({"gather", "craft"}) do
+      local list = CROX2_PROF_EMOTES and CROX2_PROF_EMOTES[kind .. ":" .. k]
+      if list and #list > 0 then
+        local e = list[math.random(#list)]
+        local pr = (ns.PRON or {})[cdb().pronouns] or (ns.PRON or {}).they or {}
+        local et = e.t:gsub("%[(%a+)%]", function(w) return pr[w:lower()] or ("[" .. w .. "]") end)
+        out[#out + 1] = "  " .. (pf.name or "Your character") .. " " .. et
+        out[#out + 1] = "    |cff999999Triggers on: " .. (kind == "gather"
+          and (k == "fishing" and "looting a catch" or ("gathering with " .. profLabel(k)))
+          or ("crafting something with " .. profLabel(k))) .. " - a profession emote, about 1 time in 10, at most once every 5 minutes, only out of combat|r"
+        n = n + 1
+      end
+    end
+    out[#out + 1] = ""
+  end
+  return table.concat(out, "\n"), n
+end
+
+local profSampleFrame
+function ns.openProfSamples()
+  if not profSampleFrame then
+    local f = W.panel("CROX2ProfSamples", "cro/x - profession line samples", 640, 520)
+    profSampleFrame = f
+    local intro = W.hint(f, "A few examples from the profession lines your character could say, with what would set each one off. Only you see this.")
+    intro:SetPoint("TOPLEFT", 16, -34)
+    intro:SetPoint("RIGHT", -16, 0)
+    intro:SetWordWrap(true)
+    local sf, content = W.scroll(f)
+    sf:SetPoint("TOPLEFT", 14, -62)
+    sf:SetPoint("BOTTOMRIGHT", -32, 44)
+    local txt = W.text(content, "", "GameFontHighlight")
+    txt:SetPoint("TOPLEFT", 4, -4)
+    txt:SetWidth(560)
+    txt:SetWordWrap(true)
+    f.txt, f.content = txt, content
+    function f:fill()
+      local text = ns.profSampleText(3)
+      self.txt:SetText(text)
+      self.content:SetHeight(math.max(10, (self.txt:GetStringHeight() or 300) + 12))
+    end
+    local more = W.button(f, "Another sample", 130, function() f:fill() end)
+    more:SetPoint("BOTTOMRIGHT", -16, 12)
+    local close = W.button(f, "Close", 90, function() f:Hide() end)
+    close:SetPoint("RIGHT", more, "LEFT", -6, 0)
+  end
+  profSampleFrame:Show()
+  profSampleFrame:fill()
 end
 
 local function countKeys(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
@@ -1119,18 +1245,82 @@ local function buildLines(parent)
       return short, full
     end
     local shown, locked = {}, {}
+    local hide = cdb().lineHide
+    if not hide then hide = {} cdb().lineHide = hide end
+    local kindCount, hiddenN = {}, 0
     for _, o in ipairs(gather()) do
       o.locked, o.other = nil, nil
       local okSrc = not next(state.sources) or state.sources[sourceKind(o)]
       local okSearch = state.search == "" or o.line.t:lower():find(state.search, 1, true)
       if okSrc and okSearch then
+        local list
         if state.view == "others" then
           -- another class's tag or spec lines (anything else that is blocked stays hidden)
           local cls = o.cls or o.id:match("^tag:class:([^|]+)")
-          if cls and cls ~= ns.profile.class and (not state.cls or cls == state.cls) and canSay(o, "other") then o.locked, o.other = true, cls shown[#shown + 1] = o end
-        elseif canSay(o) then shown[#shown + 1] = o
-        elseif o.cls and o.cls == ns.profile.class and canSay(o, "spec") then o.locked = true locked[#locked + 1] = o end    -- a spec line you could unlock
+          if cls and cls ~= ns.profile.class and (not state.cls or cls == state.cls) and canSay(o, "other") then o.locked, o.other = true, cls list = shown end
+        elseif canSay(o) then list = shown
+        elseif o.cls and o.cls == ns.profile.class and canSay(o, "spec") then o.locked = true list = locked end    -- a spec line you could unlock
+        if list then
+          local k = sourceKind(o)
+          kindCount[k] = (kindCount[k] or 0) + 1
+          if hide[k] then hiddenN = hiddenN + 1 else list[#list + 1] = o end
+        end
       end
+    end
+    -- tag chips: one per kind of line in this tab; click one to hide those lines, click again to bring them back
+    local chipKinds = {}
+    for _, it in ipairs(SOURCE_LIST) do if kindCount[it[1]] or hide[it[1]] then chipKinds[#chipKinds + 1] = it[1] end end
+    local chipBottom = 0
+    self.chips = self.chips or {}
+    if #chipKinds > 1 or next(hide) then
+      if not self.chipLabel then self.chipLabel = W.hint(self, "Show lines tagged:") end
+      self.chipLabel:ClearAllPoints()
+      self.chipLabel:SetPoint("TOPLEFT", 8, -(hdr + 34))
+      self.chipLabel:Show()
+      local x, row, w = 110, 0, self.w or 600
+      for i, k in ipairs(chipKinds) do
+        local b = self.chips[i]
+        if not b then
+          b = CreateFrame("Button", nil, self)
+          b:SetHeight(20)
+          b.bg = b:CreateTexture(nil, "BACKGROUND")
+          b.bg:SetAllPoints()
+          b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+          b.label:SetPoint("CENTER")
+          self.chips[i] = b
+        end
+        local off = hide[k] == true
+        b.kind = k
+        b.label:SetText(("%s (%d)"):format(CHIP_LABEL[k] or k, kindCount[k] or 0))
+        b.label:SetTextColor(off and 0.5 or 1, off and 0.5 or 0.82, off and 0.5 or 0.2)
+        b.bg:SetColorTexture(off and 0 or 0.18, off and 0 or 0.14, off and 0 or 0.06, off and 0.45 or 0.9)
+        b.off = off
+        b:SetWidth((b.label:GetStringWidth() or 40) + 16)
+        if x + b:GetWidth() > w - 6 and x > 110 then x = 110 row = row + 1 end
+        b:ClearAllPoints()
+        b:SetPoint("TOPLEFT", x, -(hdr + 31 + row * 24))
+        x = x + b:GetWidth() + 4
+        b:SetScript("OnClick", function(self)
+          W.sound(hide[self.kind] and "check" or "uncheck")
+          hide[self.kind] = (not hide[self.kind]) or nil
+          state.limit = 100
+          s:refresh() if ns.relayout then ns.relayout() end
+        end)
+        b:SetScript("OnEnter", function(self)
+          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+          GameTooltip:SetText(CHIP_LABEL[self.kind] or self.kind, 1, 0.82, 0)
+          GameTooltip:AddLine(self.off and "Hidden from this list. Click to show them again. This only changes what you see here, not what the character says."
+            or "Click to hide these lines from the list while you look for something. This only changes what you see here, not what the character says.", 1, 1, 1, true)
+          GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        b:Show()
+      end
+      for i = #chipKinds + 1, #self.chips do self.chips[i]:Hide() end
+      chipBottom = 3 + (row + 1) * 24
+    else
+      if self.chipLabel then self.chipLabel:Hide() end
+      for _, b in ipairs(self.chips) do b:Hide() end
     end
     local sayable = state.view == "others" and 0 or #shown
     for _, o in ipairs(locked) do shown[#shown + 1] = o end      -- locked ones come last
@@ -1138,12 +1328,13 @@ local function buildLines(parent)
       self.count:SetText(("%d line%s from other classes (to look at only)"):format(#shown, #shown == 1 and "" or "s"))
     else
       self.count:SetText(("%d line%s your character can say%s"):format(sayable, sayable == 1 and "" or "s",
-        #locked > 0 and (" · " .. #locked .. " more to unlock") or ""))
+        #locked > 0 and (" · " .. #locked .. " more to unlock") or "")
+        .. (hiddenN > 0 and (" · " .. hiddenN .. " hidden by tags") or ""))
     end
     self.count:ClearAllPoints()
     self.count:SetPoint("TOPLEFT", 8, -(hdr + 8))
     for _, r in ipairs(self.rows) do r:Hide() end
-    local y = -(hdr + 32)
+    local y = -(hdr + 32 + chipBottom)
     local limit = math.min(#shown, state.limit)
     for i = 1, limit do
       local o = shown[i]

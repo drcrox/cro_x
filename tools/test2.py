@@ -589,3 +589,60 @@ r = lua.eval('''function(ns)
 end''')(ns)
 check("other classes' lines are listed in their own view", r["n"] > 0 and "other classes" in r["count"], r)
 check("your own class never appears in the other-classes view and nothing switches", r["own"] == 0 and r["same"], r)
+
+# --- tag chips on the Lines page: hide a kind of line while looking, bring it back
+r = lua.eval('''function(ns)
+  ns.openSection("lines")
+  local L = ns._sections.lines
+  L._state.limit = 800
+  L:pickTab("attacks", "heavy"); L:refresh()
+  local out = {}
+  local function n() return tonumber(L.count._text:match("^(%d+) line")) or 0 end
+  out.all = n()
+  out.chips = 0
+  local target
+  for _, b in ipairs(L.chips or {}) do
+    if b._shown then out.chips = out.chips + 1 if b.kind == "base" then target = b end end
+  end
+  out.hasBase = target ~= nil
+  if target then
+    target:Click()
+    out.afterHide = n()
+    out.note = L.count._text
+    out.saved = ns.cdb.lineHide.base == true
+    L._state.sources = {}
+    L:pickTab("kill"); out.kill = n()     -- the hide holds across tabs
+    out.killNote = L.count._text
+    for _, b in ipairs(L.chips or {}) do if b._shown and b.kind == "base" then b:Click() end end
+    L:pickTab("attacks", "heavy"); out.back = n()
+    out.cleared = ns.cdb.lineHide.base == nil
+  end
+  L._state.limit = 100
+  L:pickTab("all")
+  return out
+end''')(ns)
+r = dict(r)
+check("source chips show for the kinds of line in a tab", r["chips"] >= 1 and r["hasBase"], r)
+check("hiding a tag hides those lines, says so, and survives a tab change", r["afterHide"] < r["all"] and "hidden by tags" in r["note"] and r["saved"] and "hidden by tags" in r["killNote"], r)
+check("clicking the chip again brings the lines back", r["back"] == r["all"] and r["cleared"], r)
+
+# --- profession samples: examples for the character's professions, with what triggers each
+r = lua.eval('''function(ns)
+  local savedProfs = ns.profile.profs
+  ns.profile.profs = {cooking = true, first_aid = true}
+  local text, n = ns.profSampleText(3)
+  local out = {text = text, n = n}
+  ns.openProfSamples()
+  out.shown = _G.CROX2ProfSamples and _G.CROX2ProfSamples._shown
+  ns.cdb.profLines = false
+  out.offText = ns.profSampleText(3)
+  ns.cdb.profLines = true
+  ns.profile.profs = savedProfs
+  return out
+end''')(ns)
+r = dict(r)
+check("profession samples list each profession with a trigger", "Cooking" in r["text"] and "Triggers on:" in r["text"] and r["n"] >= 3, r["text"][:300])
+check("cooking lines trigger on food", "using food" in r["text"], r["text"][:400])
+check("no raw pronoun placeholders in samples", "[their]" not in r["text"] and "[they]" not in r["text"] and "[them]" not in r["text"], r["text"][:300])
+check("the sample window opens", r["shown"] == True, r)
+check("samples say when profession lines are off", "switched off" in r["offText"], r["offText"][:120])

@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.45 · 2026-11-15
+- tag chips on the Lines page; profession combat lines switch with a sample window
+
 ## 0.57-alpha2.44 · 2026-11-15
 - Lines page as folio tabs
 

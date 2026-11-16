@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.44"
+local BUILD = "0.57-alpha2.45"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -51,7 +51,7 @@ local DRIVES = {"honor", "coin", "vengeance", "faith", "glory", "duty"}
 ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
-  profLines = true, testing = false,
+  profLines = true, testing = false, lineHide = {},
   on = true, chatty = 3, raidChatty = 3, chattyScale = 3, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
