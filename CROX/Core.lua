@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.61"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.61-beta.2"
+local BUILD = "0.61-beta.3"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -307,6 +307,15 @@ ns.pct = pct
 
 local function unitIs(a, b) return bool(safe(UnitIsUnit, a, b)) end
 
+-- how a foe's level compares to yours: trivial (5 or more below), easy, even, hard (2 to 4 above), deadly (5 above or a skull)
+function ns.levelRank(lvl, mine)
+  if lvl == nil then return nil end
+  if lvl == -1 then return "deadly" end
+  if mine == nil then return nil end
+  local d = lvl - mine
+  if d <= -5 then return "trivial" elseif d <= -2 then return "easy" elseif d <= 1 then return "even" elseif d <= 4 then return "hard" end
+  return "deadly"
+end
 local function targetFacts()
   if ns.sim then return ns.sim.tgt end        -- the combat simulator supplies a pretend target
   local t = {}
@@ -332,6 +341,9 @@ local function targetFacts()
   local cls = str(safe(UnitClassification, "target"))
   local lvl = num(safe(UnitLevel, "target"))
   t.boss = (cls == "worldboss" or cls == "elite" or cls == "rareelite") or lvl == -1
+  t.level = lvl
+  t.rank = ns.levelRank(lvl, num(safe(UnitLevel, "player")))
+  t.tough = t.rank == "hard" or t.rank == "deadly"
   return t
 end
 
@@ -417,6 +429,8 @@ local function markTrue(tok, ctx)
   if tok == "enemytarget" then return ctx.onEnemy end
   if tok == "pet" then return ctx.pet end
   if tok == "stealth" then return ctx.stealth == true end
+  if tok == "trivial" then return tg.rank == "trivial" end
+  if tok == "tough" then return tg.tough == true end
   if tok == "beast" then return tg.ctype == "beast" end
   if tok == "outdoors" then return ctx.outdoors end
   if tok == "fish" then return ctx.isFish == true end
@@ -696,7 +710,8 @@ local function yellEarned(moment, ctx, t)
   ctx = ctx or {}
   local hp = ctx.hp
   if hp and hp < 50 then return true end
-  if ctx.tgt and ctx.tgt.boss then return true end
+  if ctx.tgt and ctx.tgt.rank == "trivial" then return false, "trivial foe" end
+  if ctx.tgt and (ctx.tgt.boss or ctx.tgt.rank == "deadly") then return true end
   if ns.inCombat and fightT0 > 0 and t - fightT0 >= DRAGGED_ON then return true end
   return false, "no stakes"
 end

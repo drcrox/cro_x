@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.61-beta.3 · 2026-11-15
+- Simulator Advanced settings: mobs, level, length, rests, party damage, random everything
+
 ## 0.61-beta.2 · 2026-11-15
 - party flood limits: one call for help at a time, a limit on lines in ten seconds, calls in the sim are said not yelled
 

@@ -1064,3 +1064,83 @@ check("the race tab lists every Horde race with the character's boxed", r["raceT
 check("the temperament tab lists all six and boxes one", r["tempTotal"] == 6 and r["tempOwned"] == 1, r)
 check("the professions tab lists every profession and boxes the character's", r["profTotal"] == 12 and r["profOwned"] >= 1, r)
 check("the homeland tab lists every homeland", r["homeTotal"] >= 20, r)
+
+# --- more to simulate: mobs, levels, fight length, rests, party damage, random everything, the Advanced panel (0.61-beta.3)
+r = lua.eval('''function(ns, H)
+  local out, S = {}, ns.Sim
+  ns.cdb.on = true ns.cdb.testing = false ns.cdb.cr = true ns.cdb.turns = true
+  ns.cdb.simFakes = {} ns.cdb.simFakeN = nil
+  out.ranks = table.concat({ns.levelRank(30, 40), ns.levelRank(38, 40), ns.levelRank(40, 40), ns.levelRank(43, 40), ns.levelRank(46, 40), ns.levelRank(-1, 40)}, ",")
+  out.nilRank = ns.levelRank(nil, 40) == nil
+  -- a trivial foe never earns a yell, a skull-level one does
+  ns.cdb.yell = true
+  local function go(rank, boss, text)
+    local ctx = ns.makeCtx(nil, nil)
+    ctx.hp = 100
+    ctx.tgt = {exists = true, enemy = true, boss = boss, rank = rank}
+    ns.deliver({line = {t = text}, id = "test:lvl:" .. text, pool = "arch:powerup"}, ctx, "powerup")
+    return H.sent[#H.sent].ch
+  end
+  H.tick(500) out.trivial = go("trivial", true, "Level one")
+  H.tick(500) out.deadly = go("deadly", false, "Level two")
+  -- the Advanced settings drive a run
+  S.open()
+  CROX2SimFrame.scenario = 4
+  ns.cdb.simAdv = {mobs = 4, level = "hard", pulls = 1, dur = 40, rest = 2, dmg = "none", boss = false}
+  local kills = 0
+  local origKill = ns.simKill
+  ns.simKill = function(n) kills = kills + 1 return origKill(n) end
+  local guids, ranks, minHp = {}, {}, 100
+  math.randomseed(5)
+  S.start(4, 1, "beast")
+  for i = 1, 400 do
+    H.tick(0.5) S.tick()
+    local tg = ns.sim and ns.sim.tgt
+    if tg and tg.guid then guids[tg.guid] = true ranks[tg.rank or "?"] = true end
+    if ns.sim and ns.sim.hp and ns.sim.hp < minHp then minHp = ns.sim.hp end
+    if not S.running() then break end
+  end
+  ns.simKill = origKill
+  local n = 0 for _ in pairs(guids) do n = n + 1 end
+  out.kills, out.targets, out.hard = kills, n, ranks.hard == true
+  out.noDamage = minHp == 100
+  out.finished = not S.running()
+  -- two short fights with short rests finish quickly; heavy damage hurts
+  ns.cdb.simAdv = {mobs = 1, level = "even", pulls = 2, dur = 10, rest = 2, dmg = "brutal", boss = false}
+  local low = 100
+  S.start(4, 1, "mix")
+  local ticks = 0
+  for i = 1, 400 do
+    H.tick(0.5) S.tick() ticks = i
+    if ns.sim and ns.sim.hp and ns.sim.hp < low then low = ns.sim.hp end
+    if not S.running() then break end
+  end
+  out.twoFights = not S.running() and ticks * 0.5 < 45
+  out.brutalHurts = low < 70
+  -- a preset fills the sliders; random everything rolls inside the limits and shows what it rolled
+  local msgs = {}
+  CROX2SimFrame.msgs.AddMessage = function(_, text) msgs[#msgs + 1] = text end
+  math.randomseed(9)
+  S.rollAll()
+  local A = ns.cdb.simAdv
+  out.rollOk = A.mobs >= 1 and A.mobs <= 10 and A.pulls >= 1 and A.pulls <= 8 and A.dur >= 15 and A.dur <= 240 and A.rest >= 2 and A.rest <= 30
+  out.rollCustom = CROX2SimFrame.scenario == 4
+  out.partyOk = S.fakeCount() >= 0 and S.fakeCount() <= 4
+  out.rolledText = (msgs[#msgs] or ""):find("Rolled:", 1, true) ~= nil
+  -- the Advanced panel opens and closes
+  CROX2SimFrame.setAdv(true)
+  out.open = CROX2SimFrame.adv:IsShown() and CROX2SimFrame.advBtn:GetText() == "Advanced <<"
+  CROX2SimFrame.setAdv(false)
+  out.closed = not CROX2SimFrame.adv:IsShown() and CROX2SimFrame.advBtn:GetText() == "Advanced >>"
+  ns.cdb.simAdv = nil ns.cdb.simFakes = {} ns.cdb.simFakeN = nil
+  return out
+end''')(ns, H)
+r = dict(r)
+check("level ranks run from trivial to deadly", r["ranks"] == "trivial,easy,even,hard,deadly,deadly" and r["nilRank"], r)
+check("a trivial foe never earns a yell, a skull-level one does", r["trivial"] == "SAY" and r["deadly"] == "YELL", r)
+check("a pack of four mobs falls one at a time, each its own target", r["kills"] == 4 and r["targets"] >= 4 and r["hard"], r)
+check("party damage None leaves everyone at full health", r["noDamage"], r)
+check("Fights, Fight length and Rest between set how a run goes", r["finished"] and r["twoFights"], r)
+check("party damage Brutal hurts", r["brutalHurts"], r)
+check("Random everything rolls inside the limits and says what it rolled", r["rollOk"] and r["rollCustom"] and r["partyOk"] and r["rolledText"], r)
+check("the Advanced panel opens and closes", r["open"] and r["closed"], r)

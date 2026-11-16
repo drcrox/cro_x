@@ -16,8 +16,13 @@ local SCENARIOS = {
   {1, "One pull (30 seconds)", pulls = 1, dur = 30},
   {2, "Boss fight (3 minutes)", pulls = 1, dur = 180, boss = true},
   {3, "Five pulls in a row", pulls = 5, dur = 30},
+  {4, "Custom (see Advanced)", pulls = 1, dur = 30},
 }
 local SPEEDS = {{1, "2x", 2}, {2, "4x", 4}, {3, "6x", 6}, {4, "Instant", 0}}
+-- {key, label}: how the mob's level compares to yours (Random picks one per mob)
+local LEVELS = {{"random", "Random"}, {"trivial", "Much lower"}, {"easy", "Lower"}, {"even", "Equal"}, {"hard", "Higher"}, {"deadly", "Skull level"}}
+local LEVEL_NAME = {}
+for _, l in ipairs(LEVELS) do LEVEL_NAME[l[1]] = l[2] end
 local STEP = 0.25          -- pretend seconds per step
 local REAL_TICK = 0.25     -- real seconds between ticks
 -- What the sim can fight. Each kind sets the facts the addon reads about a target: creature type, boss or elite,
@@ -44,9 +49,11 @@ local ENEMIES = {
 local ENEMY_BY = {}
 for _, e in ipairs(ENEMIES) do ENEMY_BY[e[1]] = e end
 -- pick the enemy for one pull: a named kind, or a random mix
-local function pickEnemy(key)
+local function pickEnemy(key, level)
   local e = ENEMY_BY[key or ""] or ENEMIES[math.random(#ENEMIES)]
-  local info = {kind = e[1], kindName = e[2], ctype = e.ctype, player = e.player or false, faction = e.faction, boss = e.boss or false, cast = e.cast or 0.08}
+  local rank = level
+  if rank == "random" then rank = LEVELS[math.random(2, #LEVELS)][1] end
+  local info = {rank = rank, kind = e[1], kindName = e[2], ctype = e.ctype, player = e.player or false, faction = e.faction, boss = e.boss or false, cast = e.cast or 0.08}
   info.name = e.foes[math.random(#e.foes)]
   if e.races then
     local r = e.races[math.random(#e.races)]
@@ -153,6 +160,20 @@ function Sim.setCount(n)
   for i = 1, n do if not fakes()[i] then fakes()[i] = blankDef() end end
 end
 
+-- The Advanced settings: how many mobs a pull, how their level compares to yours, how long and how many fights, the rest between
+-- them, and how hard the party is hit. Kept with the character so they stay as you left them.
+local ADV_DEFAULT = {mobs = 1, level = "even", pulls = 1, dur = 30, rest = 6, dmg = "normal", boss = false}
+local function adv()
+  local a = ns.cdb.simAdv
+  if type(a) ~= "table" then a = {} ns.cdb.simAdv = a end
+  for k, v in pairs(ADV_DEFAULT) do if a[k] == nil then a[k] = v end end
+  return a
+end
+-- {key, label, how much more often hits land, chance a hit drops an ally very low}
+local DAMAGE = {{"none", "None", 0, 0}, {"light", "Light", 0.5, 0}, {"normal", "Normal", 1, 0}, {"heavy", "Heavy", 2, 0.25}, {"brutal", "Brutal", 3, 0.5}}
+local DAMAGE_BY = {}
+for _, d in ipairs(DAMAGE) do DAMAGE_BY[d[1]] = d end
+
 ------------------------------------------------------------------------
 -- The pretend party
 ------------------------------------------------------------------------
@@ -187,8 +208,8 @@ end
 local function foeTarget(r)
   local f = r.foeInfo or {}
   return {exists = true, name = r.foe, enemy = true, friend = false, self = false, player = f.player or false, ctype = f.ctype or "humanoid",
-    race = f.race, faction = f.faction, hp = r.foeHp, dead = r.foeHp <= 0, casting = r.casting, guid = "sim-" .. r.pull,
-    boss = (r.scen and r.scen.boss) or f.boss or false}
+    race = f.race, faction = f.faction, hp = r.foeHp, dead = r.foeHp <= 0, casting = r.casting, guid = "sim-" .. r.pull .. "-" .. (r.cur or 1),
+    boss = (r.scen and r.scen.boss) or f.boss or false, rank = f.rank, tough = f.rank == "hard" or f.rank == "deadly"}
 end
 local function selfTarget(a)
   return {exists = true, name = a.name, enemy = false, friend = false, self = true, player = true,
@@ -323,7 +344,10 @@ end
 
 local function startPull(t)
   run.pull = run.pull + 1
-  run.foeInfo = pickEnemy(run.enemy)
+  run.packs = {}
+  for i = 1, run.mobs do run.packs[i] = pickEnemy(run.enemy, run.level) end
+  run.cur = 1
+  run.foeInfo = run.packs[1]
   run.foe = run.foeInfo.name
   run.foeHp, run.casting, run.killed = 100, false, false
   run.start = t
@@ -344,7 +368,12 @@ local function startPull(t)
   local fi = run.foeInfo
   local what = fi.player and ("Alliance " .. (fi.raceName or "") .. " player") or ((fi.boss and "boss or elite " or "") .. (fi.ctype or ""))
   if fi.kind == "caster" then what = "caster" end
-  say(("%s-- Pull %d: %s (%s) --"):format(stamp(), run.pull, run.foe, what), 0.7, 0.7, 0.7)
+  local lvl = fi.rank and (", level " .. (LEVEL_NAME[fi.rank] or fi.rank):lower()) or ""
+  if run.mobs > 1 then
+    say(("%s-- Pull %d: %d mobs, first %s (%s%s) --"):format(stamp(), run.pull, run.mobs, run.foe, what, lvl), 0.7, 0.7, 0.7)
+  else
+    say(("%s-- Pull %d: %s (%s%s) --"):format(stamp(), run.pull, run.foe, what, lvl), 0.7, 0.7, 0.7)
+  end
 end
 
 local function endPull(t)
@@ -356,7 +385,7 @@ local function endPull(t)
   ns.simBecome(userActor)
   if run.pull >= run.scen.pulls then Sim.stop(true) return end
   run.phase = "rest"
-  run.nextAt = t + REST
+  run.nextAt = t + (run.rest or REST)
 end
 
 local function pressFor(a, t)
@@ -375,11 +404,13 @@ end
 local function stepActor(a, t, elapsed)
   ns.simBecome(a)
   local s = a.sim
-  if not run.killed and t >= a.nextHurt then
-    a.hp = math.max(8, a.hp - ((a.tank and 12 or 15) + math.random() * 25))
+  if run.dmgMult > 0 and not run.killed and t >= a.nextHurt then
+    a.hp = math.max(8, a.hp - ((a.tank and 12 or 15) + math.random() * 25) * math.min(1.6, math.sqrt(run.dmgMult)))
+    -- on the heavier settings a hit sometimes drops an ally very low (health events for the healers and the calls for help)
+    if not a.user and run.spike > 0 and math.random() < run.spike then a.hp = math.min(a.hp, 8 + math.random() * 22) end
     a.hurtAt = t
     ns.simHurt()
-    a.nextHurt = t + (a.tank and 4 or 6) + math.random() * (a.tank and 5 or 8)
+    a.nextHurt = t + ((a.tank and 4 or 6) + math.random() * (a.tank and 5 or 8)) / run.dmgMult
   elseif a.hp < 100 then
     a.hp = math.min(100, a.hp + 0.4)
   end
@@ -418,7 +449,25 @@ function Sim.step()
     return
   end
   local elapsed = t - run.start
-  run.foeHp = run.killed and 0 or math.max(0, 100 - 100 * elapsed / run.scen.dur + (math.random() - 0.5) * 3)
+  -- a pack falls one mob at a time: each gets an equal share of the fight, and the party moves on to the next
+  local per = run.scen.dur / run.mobs
+  if not run.killed then
+    local idx = math.min(run.mobs, math.floor(elapsed / per) + 1)
+    while run.cur < idx do
+      local prev = run.foe
+      for _, a in ipairs(actors) do
+        ns.simBecome(a)
+        ns.simKill(prev)
+        a.nextPress = math.min(a.nextPress, t + 0.5 + math.random() * 1.5)
+      end
+      ns.simBecome(userActor)
+      run.cur = run.cur + 1
+      run.foeInfo = run.packs[run.cur]
+      run.foe = run.foeInfo.name
+    end
+  end
+  local within = (elapsed - (run.cur - 1) * per) / per
+  run.foeHp = run.killed and 0 or math.max(0, 100 - 100 * within + (math.random() - 0.5) * 3)
   run.casting = math.random() < ((run.foeInfo and run.foeInfo.cast) or 0.08)
   run.rot = (run.rot + 1) % #actors
   for k = 0, #actors - 1 do
@@ -463,6 +512,9 @@ function Sim.start(scenario, speed, enemy)
   if ns.isAlliance and ns.isAlliance() then return end
   if InCombatLockdown and InCombatLockdown() then say("You are in a real fight. Try again when it's over.", 1, 0.5, 0.5) return end
   local scen = SCENARIOS[scenario or (frame and frame.scenario) or 1] or SCENARIOS[1]
+  local A = adv()
+  if scen[1] == 4 then scen = {4, "Custom fight", pulls = A.pulls, dur = A.dur, boss = A.boss} end
+  local dm = DAMAGE_BY[A.dmg] or DAMAGE_BY.normal
   speed = speed or (frame and frame.speed) or 1
   snapshot = ns.simSnapshot()
   local G = ns.G
@@ -493,7 +545,8 @@ function Sim.start(scenario, speed, enemy)
   local hasTank = false
   for _, a in ipairs(actors) do if a.tank then hasTank = true end end
   run = {scen = scen, pull = 0, phase = "rest", nextAt = clock0, foeHp = 100, casting = false, vt = 0, clock0 = clock0,
-    speed = speed, rot = 0, nextRoster = clock0, hasTank = hasTank, enemy = enemy or (frame and frame.enemy) or "mix"}
+    speed = speed, rot = 0, nextRoster = clock0, hasTank = hasTank, enemy = enemy or (frame and frame.enemy) or "mix",
+    mobs = math.max(1, A.mobs), level = A.level, rest = A.rest, dmgMult = dm[3], spike = dm[4], packs = {}, cur = 1}
   ns.simOut = chatLine
   ns.simQuiet = function(ctx, moment, why)
     if details then
@@ -505,6 +558,8 @@ function Sim.start(scenario, speed, enemy)
   say(("-- Simulating: %s as %s, %s, %s --"):format(scen[2], userActor.name, SPEEDS[speed][2] == "Instant" and "instantly" or ("at " .. SPEEDS[speed][2]),
     #names > 0 and ("in a party with " .. table.concat(names, ", ")) or "alone"), 0.7, 0.7, 0.7)
   if C_Timer and C_Timer.NewTicker then ticker = C_Timer.NewTicker(REAL_TICK, function() Sim.tick() end) end
+  say(("   %d %s a pull, level %s, %d s rests, party damage %s, %d %s of %d s"):format(run.mobs, run.mobs == 1 and "mob" or "mobs",
+    (LEVEL_NAME[A.level] or "?"):lower(), A.rest, dm[2]:lower(), scen.pulls, scen.pulls == 1 and "fight" or "fights", scen.dur), 0.55, 0.55, 0.55)
   if frame and frame.go then frame.go:SetText("Stop") end
   Sim.step()
   if SPEEDS[speed][3] == 0 then Sim.tick() end      -- instant: play it all now
@@ -741,6 +796,32 @@ function Sim.editFake(slot)
   Sim.showFakes(slot)
 end
 
+-- Random everything: roll the enemy, mobs, level, fight length, fights, rests, party damage and party size, and fill them in
+function Sim.rollAll()
+  if run then say("Stop the simulation first.", 1, 0.5, 0.5) return end
+  if not frame then Sim.open() end
+  local A = adv()
+  local kinds = {{"mix", "Random mix"}}
+  for _, e in ipairs(ENEMIES) do kinds[#kinds + 1] = {e[1], e[2]} end
+  local k = kinds[math.random(#kinds)]
+  frame.enemy = k[1]
+  A.mobs = math.random(1, 10)
+  A.level = LEVELS[math.random(#LEVELS)][1]
+  A.pulls = math.random(1, 8)
+  A.dur = 5 * math.random(3, 48)
+  A.rest = math.random(2, 30)
+  A.dmg = DAMAGE[math.random(#DAMAGE)][1]
+  A.boss = false
+  frame.scenario = 4
+  Sim.setCount(math.random(0, 4))
+  refreshBoxes()
+  if frame.popup then frame.popup:Hide() end
+  frame.dd.refresh() frame.ed.refresh() frame.advSync()
+  say(("Rolled: %s enemy, %d mobs a pull, level %s, %d fights of %d s, %d s rests, party damage %s, %d simulated %s."):format(k[2]:lower(), A.mobs,
+    (LEVEL_NAME[A.level] or "?"):lower(), A.pulls, A.dur, A.rest, (DAMAGE_BY[A.dmg] or DAMAGE_BY.normal)[2]:lower(), partyN(),
+    partyN() == 1 and "player" or "players"), 0.7, 0.7, 0.7)
+end
+
 function Sim.open()
   if ns.isAlliance and ns.isAlliance() then return end
   if not frame then
@@ -764,6 +845,7 @@ function Sim.open()
     local tt = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     tt:SetPoint("CENTER")
     tt:SetText("Combat sim")
+    f.chat = chat
     msgs = CreateFrame("ScrollingMessageFrame", nil, chat)
     msgs:SetPoint("TOPLEFT", 6, -6)
     msgs:SetPoint("BOTTOMRIGHT", -6, 6)
@@ -807,12 +889,87 @@ function Sim.open()
     edit:SetPoint("LEFT", none, "RIGHT", 4, 0)
     f.edit = edit
 
+
+    -- the Advanced panel: opens between the chat and the controls
+    local ADV_H = 150
+    local adp = CreateFrame("Frame", nil, f)
+    adp:SetPoint("BOTTOMLEFT", 12, 138)
+    adp:SetPoint("BOTTOMRIGHT", -12, 138)
+    adp:SetHeight(ADV_H - 6)
+    local abg = adp:CreateTexture(nil, "BACKGROUND")
+    abg:SetAllPoints()
+    abg:SetColorTexture(0.1, 0.1, 0.1, 0.5)
+    adp:Hide()
+    f.adv = adp
+    local syncing = false
+    local sliders, dds = {}, {}
+    local function slider(key, label, minV, maxV, step, x, y, fmt, custom)
+      local sl = W.slider(adp, label, minV, maxV, step, function() return adv()[key] end, function(v)
+        if syncing then return end
+        adv()[key] = v
+        if custom and f.scenario ~= 4 then f.scenario = 4 f.dd.refresh() end
+      end, fmt)
+      sl:SetPoint("TOPLEFT", x, y)
+      sl:SetWidth(170)
+      sliders[#sliders + 1] = {sl = sl, key = key}
+      return sl
+    end
+    local function dropdown(key, label, items, x, y)
+      local h = W.hint(adp, label)
+      h:SetPoint("TOPLEFT", x + 16, y + 14)
+      local d = W.dropdown(adp, 120, function()
+        local t = {}
+        for i, it in ipairs(items) do t[i] = {it[1], it[2]} end
+        return t
+      end, function() return adv()[key] end, function(v) adv()[key] = v end)
+      d:SetPoint("TOPLEFT", x - 14, y)
+      dds[#dds + 1] = d
+      return d
+    end
+    slider("mobs", "Mobs a pull", 1, 10, 1, 24, -26)
+    slider("pulls", "Fights", 1, 10, 1, 232, -26, nil, true)
+    slider("dur", "Fight length", 10, 300, 5, 440, -26, function(v) return v .. " s" end, true)
+    slider("rest", "Rest between", 2, 60, 1, 24, -70, function(v) return v .. " s" end)
+    dropdown("level", "Mob level vs. yours", LEVELS, 232, -78)
+    dropdown("dmg", "Damage to the party", DAMAGE, 440, -78)
+    function f.advSync()
+      syncing = true
+      for _, e in ipairs(sliders) do e.sl:SetValue(adv()[e.key]) end
+      for _, d in ipairs(dds) do if d.refresh then d.refresh() end end
+      syncing = false
+    end
+    local roll = W.button(adp, "Random everything", 150, function() Sim.rollAll() end)
+    roll:SetPoint("TOPLEFT", 14, -108)
+    W.tooltip(roll, "Random everything", "Rolls the enemy, mobs, level, fight length, fights, rests, party damage and party size, and fills them in so you can see them. Press Start to run it.")
+    local ah = W.hint(adp, "Changing Fights or Fight length switches the fight to Custom.")
+    ah:SetPoint("LEFT", roll, "RIGHT", 12, 0)
+    local function setAdv(open)
+      f.advOpen = open and true or false
+      adp:SetShown(f.advOpen)
+      f.chat:SetPoint("BOTTOMRIGHT", -12, f.advOpen and (138 + ADV_H) or 138)
+      f:SetHeight(f.advOpen and (440 + ADV_H) or 440)
+      f.advBtn:SetText(f.advOpen and "Advanced <<" or "Advanced >>")
+      if f.advOpen then f.advSync() end
+    end
+    f.setAdv = setAdv
+    f.advBtn = W.button(f, "Advanced >>", 100, function() setAdv(not f.advOpen) end)
+    f.advBtn:SetPoint("BOTTOMRIGHT", -14, 106)
+
     -- scenario, speed, start
     local dd = W.dropdown(f, 170, function()
       local t = {}
       for i, s in ipairs(SCENARIOS) do t[i] = {s[1], s[2]} end
       return t
-    end, function() return f.scenario end, function(v) f.scenario = v end)
+    end, function() return f.scenario end, function(v)
+      f.scenario = v
+      -- a preset fills the Advanced sliders with its numbers
+      local sc = SCENARIOS[v]
+      if v ~= 4 and sc then
+        local A = adv()
+        A.pulls, A.dur, A.boss = sc.pulls, sc.dur, sc.boss or false
+        if f.advSync then f.advSync() end
+      end
+    end)
     dd:SetPoint("BOTTOMLEFT", 2, 50)
     f.dd = dd
     local ed = W.dropdown(f, 130, function()
@@ -848,12 +1005,14 @@ function Sim.open()
   frame:Show()
   frame.dd.refresh()
   frame.ed.refresh()
+  frame.advSync()
   frame.sp.refresh()
   refreshBoxes()
   if not frame.welcomed then
     frame.welcomed = true
     say("Pretend fights run through your character's real lines. Nothing here goes to chat.", 0.7, 0.7, 0.7)
     say("The sim keeps its own clock: pick 2x, 4x, 6x or Instant. Click a SimP box to set how many simulated players are in the party.", 0.7, 0.7, 0.7)
+    say("Advanced (bottom right) sets mobs a pull, mob level, fight length, rests and how hard the party is hit.", 0.7, 0.7, 0.7)
     say("Pick a fight and an enemy (or a random mix) and press Start. Turn on testing mode in Options to keep the data.", 0.7, 0.7, 0.7)
   end
 end
