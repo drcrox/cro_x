@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.36"
+local BUILD = "0.57-alpha2.37"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -52,7 +52,7 @@ ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
   profLines = true, testing = false,
-  on = true, chatty = 3, raidChatty = 2, chattyScale = 2, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
+  on = true, chatty = 3, raidChatty = 2, chattyScale = 3, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
   setupDone = false, off = {}, said = {}, last = {}, custom = {}, recipes = {}, recipeNames = {},
@@ -88,6 +88,13 @@ local function initDB()
     cdb.chatty = math.min(5, math.max(1, tonumber(cdb.chatty) or 2) + 1)
     if cdb.raidChatty ~= nil then cdb.raidChatty = math.min(5, math.max(1, tonumber(cdb.raidChatty) or 1) + 1) end
     cdb.chattyScale = 2
+  end
+  -- ...and from five to seven (Silent at the bottom, Loud and Roaring for groups): move the five up by rate
+  if cdb.chatty ~= nil and (cdb.chattyScale or 1) < 3 then
+    local map = {2, 3, 4, 5, 6}
+    cdb.chatty = math.min(5, map[math.max(1, math.min(5, tonumber(cdb.chatty) or 3))])
+    if cdb.raidChatty ~= nil then cdb.raidChatty = map[math.max(1, math.min(5, tonumber(cdb.raidChatty) or 2))] end
+    cdb.chattyScale = 3
   end
   fillDefaults(db, ACCOUNT_DEFAULTS)
   fillDefaults(cdb, CHAR_DEFAULTS)
@@ -658,12 +665,15 @@ ns.channelFor = channelFor
 -- Pace. Each level has a target spread of lines a minute, a rate (the middle of the spread, used to refill the speech
 -- budget) and a chance multiplier. In a party the loudest member's rate sets the whole party's budget.
 local CHATTY = {
-  [1] = {name = "Hushed", est = "1-2 a minute", rate = 1.5, mult = 0.2},
-  [2] = {name = "Quiet", est = "2-3 a minute", rate = 2.5, mult = 0.35},
-  [3] = {name = "Normal", est = "3-4 a minute", rate = 3.5, mult = 0.75},
-  [4] = {name = "Lively", est = "4-5 a minute", rate = 4.5, mult = 1.05},
-  [5] = {name = "Chatterbox", est = "5-6 a minute", rate = 5.5, mult = 1.4},
+  [1] = {name = "Silent", est = "0-1 a minute", rate = 0.5, mult = 0.05},
+  [2] = {name = "Hushed", est = "1-3 a minute", rate = 2.0, mult = 0.3},
+  [3] = {name = "Quiet", est = "2-4 a minute", rate = 3.0, mult = 0.6},
+  [4] = {name = "Steady", est = "3-5 a minute", rate = 4.0, mult = 0.85},
+  [5] = {name = "Vocal", est = "4-6 a minute", rate = 5.0, mult = 1.2},
+  [6] = {name = "Loud", est = "5-7 a minute", rate = 6.0, mult = 1.6},      -- group setting only
+  [7] = {name = "Roaring", est = "6-7 a minute", rate = 6.5, mult = 1.9},   -- group setting only
 }
+local SOLO_LEVELS = 5       -- the solo setting offers the first five; the last two are for groups
 -- Speech budget: it refills steadily at the level's rate, a line costs one, and it holds at most two, so there can
 -- be a small burst at the pull and then a natural recovery. Big moments are always allowed (they still spend it).
 local SAFE_GAP = 2          -- seconds between any two of your lines, always (keeps chat from throttling)
@@ -674,16 +684,18 @@ local lastSpoke = -1000
 local SILENCE_FULL = 30     -- seconds of quiet in a fight after which the chance has risen to its top
 local REFRACTORY = 10       -- seconds over which the chance recovers after a line
 ns.CHATTY = CHATTY
-function ns.chattyItems()
+function ns.chattyItems(group)
   local t = {}
-  for i, c in ipairs(CHATTY) do t[i] = {i, c.name} end
+  for i, c in ipairs(CHATTY) do
+    if group or i <= SOLO_LEVELS then t[#t + 1] = {i, c.name} end
+  end
   return t
 end
 -- the pace setting in force: raids have their own (quieter by default), everything else uses How chatty
 function ns.chattyNow()
   local c = ns.cdb or cdb
-  if bool(safe(IsInRaid)) then return c.raidChatty or 2 end
-  return c.chatty or 3
+  if bool(safe(IsInRaid)) then return math.min(7, c.raidChatty or 2) end
+  return math.min(SOLO_LEVELS, c.chatty or 3)
 end
 
 function ns.sinceSpoke() return now() - lastSpoke end

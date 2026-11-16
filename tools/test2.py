@@ -278,10 +278,12 @@ check("splash shows an example line below the dropdowns", "Example:" in r["examp
 r = lua.eval('''function(ns)
   local out = {}
   out.levels = #ns.CHATTY
-  local items = ns.chattyItems()
+  local items = ns.chattyItems(false)
+  out.soloCount, out.groupCount = #items, #ns.chattyItems(true)
   out.item1, out.item3, out.item5 = items[1][2], items[3][2], items[5][2]
+  out.lastGroup = ns.chattyItems(true)[7][2]
   local ps = {}
-  for i = 1, 5 do ps[i] = ns.CHATTY[i].rate end
+  for i = 1, 7 do ps[i] = ns.CHATTY[i].rate end
   out.perMin = table.concat(ps, ",")
   -- the three-level numbers move up by one, Normal staying Normal
   local savedDB = CROX2CharDB
@@ -305,10 +307,10 @@ r = lua.eval('''function(ns)
   out.always, out.rarely = always, hits / 2000
   ns.cdb.crAsk = 4
   return out end''')(ns)
-check("five paces with estimates", r["levels"] == 5 and "Hushed" in r["item1"] and "minute" not in r["item1"] and "Normal" in r["item3"] and "Chatterbox" in r["item5"], (r["item1"], r["item3"], r["item5"]))
-check("pace rates rise with each level", r["perMin"] == "1.5,2.5,3.5,4.5,5.5", r["perMin"])
-check("old three-level pace moves up one (Normal stays Normal)", r["migrated"] == "3,2,2" and r["migratedLively"] == 4, (r["migrated"], r["migratedLively"]))
-check("new characters start at Normal, raids Quiet, call dials Always", r["fresh"] == "3,2,4,4", r["fresh"])
+check("seven levels: solo offers five, groups all seven", r["levels"] == 7 and r["soloCount"] == 5 and r["groupCount"] == 7 and r["item1"] == "Silent" and r["item3"] == "Quiet" and r["item5"] == "Vocal" and r["lastGroup"] == "Roaring", (r["item1"], r["item3"], r["item5"], r["lastGroup"]))
+check("pace rates rise with each level", r["perMin"] == "0.5,2,3,4,5,6,6.5", r["perMin"])
+check("older paces move onto the seven-level scale by rate", r["migrated"] == "4,3,3" and r["migratedLively"] == 5, (r["migrated"], r["migratedLively"]))
+check("new characters start at Quiet (2-4), raids Hushed (1-3), call dials Always", r["fresh"] == "3,2,4,4", r["fresh"])
 check("call dials: Always never skips, Rarely about a quarter", r["always"] and 0.18 < r["rarely"] < 0.32, r["rarely"])
 
 # --- multi-speaker groundwork

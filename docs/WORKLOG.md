@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.37 · 2026-11-15
+- Seven pace levels (Silent to Roaring), Loud and Roaring for groups only
+
 ## 0.57-alpha2.36 · 2026-11-15
 - Talkative / How social labels
 
