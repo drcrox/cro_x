@@ -42,7 +42,7 @@ msgs = [m.msg for m in H.addon.values()]
 check("CALL addon message sent", any(m.startswith("V2|CALL|0|debuffhelp|Krakka") for m in msgs), msgs[-3:])
 
 # --- 2. low health call
-H.tick(6)
+H.tick(40)
 H.me.hp = 25
 onAddon("CROX", "V2|ST|0|H", "PARTY", "Krakka")
 n0 = nsent(); press(2); out = sent_since(n0)
@@ -965,6 +965,69 @@ r = lua.eval('''function(ns)
 end''')(ns)
 r = dict(r)
 check("the Kor'kon section sits in the Credits page, not its own tab", r["head"] == "Kor'kon:" and "Brentos" in r["text"] and "Flatzz" in r["text"] and "Seadub" in r["text"] and r["noOwnTab"], r)
+
+# a party cannot flood: one call for help at a time, and a limit on lines in ten seconds
+r = lua.eval('''function(ns, H)
+  local out = {}
+  local G = ns.G
+  ns.cdb.turns = true
+  H.group = true H.party = {party1 = "Krakka"}
+  G._test.onAddon("CROX", "V2|HI|0|0.50|SHAMAN", "PARTY", "Krakka")
+  H.tick(100)
+  out.freeAtFirst = G.callBlock(GetTime()) == nil
+  G._test.onAddon("CROX", "V2|CALL|0|lowhealth|Someone||x1", "PARTY", "Krakka")
+  out.heldAfterACall = G.callBlock(GetTime()) ~= nil
+  H.tick(65)
+  out.freeAgain = G.callBlock(GetTime()) == nil
+  -- the crowding limit: after four lines in ten seconds the next said line is held
+  for i = 1, 4 do G.noteSpoke("said") H.tick(1) end
+  out.crowded = G.chatBlock(GetTime(), 4) ~= nil and G.chatBlock(GetTime(), 5) == nil
+  H.tick(12)
+  out.clearsAfterTen = G.chatBlock(GetTime(), 4) == nil
+  -- turns off: the limits are not applied to you
+  ns.cdb.turns = false
+  G._test.onAddon("CROX", "V2|CALL|0|lowhealth|Someone||x2", "PARTY", "Krakka")
+  out.turnsOff = G.callBlock(GetTime()) == nil
+  ns.cdb.turns = true
+  H.group = false
+  return out
+end''')(ns, H)
+r = dict(r)
+check("calls for help: one at a time, free again after the gap", r["freeAtFirst"] and r["heldAfterACall"] and r["freeAgain"], r)
+check("the party's lines in ten seconds are limited, and it clears", r["crowded"] and r["clearsAfterTen"], r)
+check("take-turns off: the limits are not applied", r["turnsOff"], r)
+
+# in a simulated party at the loudest pace, nobody floods the chat
+r = lua.eval('''function(ns, H)
+  local S = ns.Sim
+  ns.cdb.on = true ns.cdb.testing = false ns.cdb.cr = true ns.cdb.turns = true
+  local saved = ns.cdb.raidChatty
+  ns.cdb.raidChatty = 7
+  local cl = {{"Orc","WARRIOR"},{"Forsaken","PRIEST"},{"Troll","MAGE"},{"Tauren","DRUID"}}
+  ns.cdb.simFakes = {} ns.cdb.simFakeN = nil
+  for i = 1, 4 do ns.cdb.simFakes[i] = S.resolve({race = cl[i][1], class = cl[i][2], pace = 7}) end
+  S.open()
+  local times, yells, lines = {}, 0, 0
+  CROX2SimFrame.msgs.AddMessage = function(_, text)
+    local m, sec = text:match("%[(%d+):(%d+)%]")
+    if m then times[#times + 1] = tonumber(m) * 60 + tonumber(sec) end
+    if text:find(" yells: ", 1, true) then yells = yells + 1 end
+    if m then lines = lines + 1 end
+  end
+  local worst = 0
+  math.randomseed(11)
+  S.start(3, 4, "mix")
+  for _, a in ipairs(times) do
+    local n = 0
+    for _, b in ipairs(times) do if b >= a and b < a + 10 then n = n + 1 end end
+    if n > worst then worst = n end
+  end
+  ns.cdb.simFakes = {} ns.cdb.raidChatty = saved
+  return {worst = worst, yells = yells, lines = lines}
+end''')(ns, H)
+r = dict(r)
+check("five voices at the loudest pace never put more than six lines in ten seconds", r["worst"] <= 6, r)
+check("calls in the simulator are said, not yelled, nearly always", r["lines"] > 20 and r["yells"] * 4 < r["lines"], r)
 
 # --- Setup page: Character tags tabs, with a box on what the character has
 r = lua.eval('''function(ns)

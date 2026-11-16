@@ -15,6 +15,9 @@ local partyTimes = {}        -- times of party lines (last minute)
 local lastPartySpoke, lastPartySpeaker = -1000, nil
 local lastPartyYell = -1000                      -- when anyone in the party last yelled (a line, not a call across distance)
 local PARTY_YELL_GAP = 20
+local lastCallAny = -1000                       -- when anyone in the party last called for help (one call at a time)
+local EXCH_GAP_MIN, EXCH_GAP_MAX = 15, 60
+local lineTimes = {}                             -- when the party's recent lines went out (any kind), for the crowding limit
 local pendingReply           -- {kind, caller, t, dtype}
 local pendingThanks          -- {helper, t}
 local lastCall = {}          -- [kind] = time
@@ -212,6 +215,8 @@ function G.paceBlock(t)
   local cdb = ns.cdb
   if not cdb.turns or not grouped() or #others() == 0 then return nil end
   if t - lastPartySpoke < PARTY_HOLD then return "party: holding after someone spoke" end
+  local crowded = G.chatBlock(t, 4)
+  if crowded then return crowded end
   refillParty(t)
   if pBudget < 1 then return "party: pace for the whole party" end
   if lastPartySpeaker == me() and t - lastPartySpoke < 15 then return "party: letting someone else talk" end
@@ -226,8 +231,25 @@ local function notePartyLine(who)
   while #partyTimes > 20 do table.remove(partyTimes, 1) end
 end
 
+local function noteLine(t)
+  lineTimes[#lineTimes + 1] = t
+  while #lineTimes > 30 do table.remove(lineTimes, 1) end
+end
+-- Crowding limit: no matter the dials, a party of voices does not say more than a few lines in ten seconds. Said lines
+-- stop at 4, answers at 5; the thanks and answers to thanks that trail an exchange stop sooner, at 3, so they never pile on top of it.
+local CROWD_SECS = 10
+function G.chatBlock(t, limit)
+  if not ns.cdb.turns or not grouped() or #others() == 0 then return nil end
+  local n = 0
+  for i = #lineTimes, 1, -1 do
+    if t - lineTimes[i] <= CROWD_SECS then n = n + 1 else break end
+  end
+  if n >= limit then return "party: too many lines just now" end
+end
+
 -- Core calls this after any line goes out. kind: "said" | "call" | "reply"
 function G.noteSpoke(kind, yelled)
+  noteLine(now())
   if kind == "call" then return end          -- a call counts only once answered (the reply counts the pair)
   notePartyLine(me())
   if yelled then
@@ -236,6 +258,16 @@ function G.noteSpoke(kind, yelled)
   else
     send("SP", kind == "reply" and 1 or 0, ns.chattyNow())
   end
+end
+-- Calls for help: the party makes one at a time. Without this, a pull that goes wrong has everyone calling and answering
+-- at once, which no dial can calm. The gap after a call is shorter at louder paces (90 / lines a minute, kept between 15
+-- and 60 seconds). A held call is not lost: the press falls through to the ordinary line, and the call comes again at
+-- the next press once the gap is over.
+function G.callBlock(t)
+  if not ns.cdb.turns or #others() == 0 then return nil end
+  local ch = ns.CHATTY[loudest()] or ns.CHATTY[3]
+  local gap = math.max(EXCH_GAP_MIN, math.min(EXCH_GAP_MAX, 90 / ch.rate))
+  if t - lastCallAny < gap then return "party: someone just called for help" end
 end
 -- true while someone in the party has just yelled: only one shout at a time
 function G.yellBlock(t)
@@ -247,6 +279,9 @@ end
 -- Saying calls and replies
 ------------------------------------------------------------------------
 local function distanceChannel(name)
+  if ns.simParty then                      -- the simulator has no distances: say, with the odd one far enough to yell
+    return (ns.cdb.yell and math.random() < 0.12) and "YELL" or "SAY"
+  end
   local u = unitFor(name)
   local close = u and safe(CheckInteractDistance, u, 4)
   if secret(close) then close = nil end
@@ -259,8 +294,10 @@ local function sayCR(pool, kind, other, ctx)
   local c = ns.choose("cr", {pool}, ctx, {noTags = true})
   if not c then return false end
   local m = members[other]
-  return ns.deliver(c, ctx, pool, {ally = other, allyClass = m and m.class},
+  local ok = ns.deliver(c, ctx, pool, {ally = other, allyClass = m and m.class},
     {channel = distanceChannel(other), kind = kind, noBroadcast = kind == "call"})
+  if ok and kind == "call" then noteLine(now()) end       -- calls and thanks skip the broadcast, but they are still lines
+  return ok
 end
 
 -- Call and response dials (Options > Group). Each is a level 1-4; 4 = always, as before. A is asking for help, B is
@@ -277,6 +314,10 @@ G.unanswered = 0
 
 -- B: the reply, when the caller's need is actually met
 local function reply(kind, caller, ctx)
+  if G.chatBlock(now(), kind == "thanks" and 3 or 5) then
+    pendingReply = nil                           -- too many voices just now: the help still happened, the line is skipped
+    return false
+  end
   if not G.crRoll("crGive") then
     -- the help happened but this one stays quiet: the call goes unanswered (a later build can have the party remark on it)
     local pr = pendingReply
@@ -330,10 +371,12 @@ function G.onPress(info, t)
   local pt = pendingThanks
   if pt and t - pt.t <= REPLY_WINDOW then
     pendingThanks = nil
+    if G.chatBlock(t, 3) then return false end
     if sayCR("cr:thanks:call", "call", pt.helper) then send("THANKS", pt.helper) return true end
   elseif pt then pendingThanks = nil end
 
   if not ns.inCombat or #others() == 0 then return false end
+  if G.callBlock(t) then return false end
 
   -- debuff help: replaces the debuff callout
   local q = ns.debuffQueue
@@ -350,6 +393,7 @@ function G.onPress(info, t)
         lastCall.debuffhelp = t
         local x = newExchangeId()
         noteExchange(x, "debuffhelp", me(), {helper})
+        lastCallAny = t
         send("CALL", "debuffhelp", helper, d.kind, x)
         return true
       end
@@ -367,6 +411,7 @@ function G.onPress(info, t)
         lastCall.lowhealth = t
         local x = newExchangeId()
         noteExchange(x, "lowhealth", me(), {helper})
+        lastCallAny = t
         send("CALL", "lowhealth", helper, "", x)
         return true
       end
@@ -388,6 +433,7 @@ function G.onPress(info, t)
         lastCall.getoff = t
         local x = newExchangeId()
         noteExchange(x, "getoff", me(), {helper})
+        lastCallAny = t
         send("CALL", "getoff", helper, "", x)
         return true
       end
@@ -437,8 +483,10 @@ local function onAddon(prefix, msg, ch, sender)
   elseif kind == "SP" then
     m.level = tonumber(parts[5]) or m.level
     if parts[6] == "Y" then lastPartyYell = t end
-    if not ns.simParty then notePartyLine(from) end      -- (the simulator's party shares one budget, so the speaker's own line already counted)
+    if not ns.simParty then notePartyLine(from) noteLine(t) end      -- (the simulator's party shares one budget, so the speaker's own line already counted)
   elseif kind == "CALL" then
+    lastCallAny = t
+    if not ns.simParty then noteLine(t) end
     local xid = (parts[7] and parts[7] ~= "") and parts[7] or (from .. "-" .. math.floor(t))
     noteExchange(xid, parts[4], from, {parts[5]})
     if parts[5] == me() then pendingReply = {kind = parts[4], caller = from, t = t, dtype = parts[6], xid = xid} end
@@ -451,6 +499,7 @@ local function onAddon(prefix, msg, ch, sender)
   elseif kind == "SAVED" then
     if parts[4] == me() and ns.cdb.cr then pendingThanks = {helper = from, t = t} end
   elseif kind == "THANKS" then
+    if not ns.simParty then noteLine(t) end
     if parts[4] == me() and ns.cdb.cr then pendingReply = {kind = "thanks", caller = from, t = t} end
   end
 end
@@ -500,7 +549,7 @@ function G.simSet(g)
   G.members, G.exchanges = members, exchanges
 end
 function G.simPending() return pendingReply end
-function G.simResetParty() pBudget, pBudgetT, lastPartySpoke, lastPartySpeaker, lastPartyYell = 1.0, 0, -1000, nil, -1000 for i = #partyTimes, 1, -1 do partyTimes[i] = nil end end
+function G.simResetParty() pBudget, pBudgetT, lastPartySpoke, lastPartySpeaker, lastPartyYell, lastCallAny = 1.0, 0, -1000, nil, -1000, -1000 for i = #partyTimes, 1, -1 do partyTimes[i] = nil end for i = #lineTimes, 1, -1 do lineTimes[i] = nil end end
 -- what a character of this class can help with, as the status flags the real addon sends
 local SIM_FLAGS = {WARRIOR = "T", PALADIN = "PDMH", PRIEST = "DMH", SHAMAN = "PDHT", DRUID = "PCHT", MAGE = "C", HUNTER = "", ROGUE = "", WARLOCK = ""}
 function G.simFlags(class, spec)

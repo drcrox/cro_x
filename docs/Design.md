@@ -318,3 +318,11 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 
 ## Kor'kon section in Credits (0.61-beta.1)
 - Kor'kon is a section at the bottom of the Credits page, not a tab of its own (it was a tab for one build, 0.60-beta.10 to the 0.61 release). Heading "Kor'kon:", then "Officers and the people who help beta test." and the names: Brentos, Flatzz, Seadub. The names live in `CROX2_KORKON` in Credits.lua (add a name there to add someone). The version label is back under the last tab, Credits.
+
+## Party flood limits (0.61-beta.2)
+- Problem: with every member on Deafening, a bad pull had everyone calling for help and answering at once (eight exchanges in seventeen seconds, almost all yelled). Calls, replies and thanks did not pass through the party's speech budget, and every member had their own call timers.
+- **One call at a time:** after anyone in the party calls for help (their own call, or a CALL message from another cro/x user), no new call goes out for 90 / lines-a-minute seconds, kept between 15 and 60 (about 15 s at Windbag and Deafening, 30 s at Social, 60 s at the quiet levels), using the loudest member's pace. A held call is not lost: the press makes the ordinary line instead, and the call comes at the next press once the gap is over.
+- **Crowding limit:** whatever the dials, the party does not put more than a few lines in ten seconds: said lines stop at four, answers to calls at five, and the thanks and answers to thanks that follow an exchange at three. Every line counts, calls and thanks included, and other members' lines are counted from their addon messages. Big moments (last stand, power-ups and the like) still go.
+- Both limits follow the "Take turns with the party" switch: with it off they are not applied to you.
+- Simulator: there are no distances, so calls and answers are said, with about one in eight yelled (the game's distance check does not work on pretend party members, which made every call a yell).
+- Measured in the simulator (five runs, five voices): the busiest ten seconds went from 9-11 lines to 4-5, and the party's lines a minute fell from about 14 to about 10 at Deafening and about 7.5 at Social.
