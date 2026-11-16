@@ -50,7 +50,7 @@ local function cap(s) return s and (s:sub(1, 1):upper() .. s:sub(2)) or "" end
 -- Alliance screen
 ------------------------------------------------------------------------
 -- The fixed Blizzard-poster background used by the Alliance screen and the Horde splash (see Credits).
--- It is not part of the art picker. The whole picture is always shown: it is fitted inside the frame at its own
+-- The whole picture is always shown: it is fitted inside the frame at its own
 -- 4:3 shape (never cropped or stretched), and any spare room stays dark. The image sits in the top three
 -- quarters of a 1024 square texture. onSize(w, h) lets a screen resize its own parts when the frame changes.
 local function posterBG(f, onSize)
@@ -322,10 +322,6 @@ local function buildOptions(parent)
   y = y - 32
   head("Window")
   check("splash", "Show the splash page at login", "A short welcome when you log in. It closes by itself after a few seconds.")
-  local artBtn = W.button(s, "Choose art...", 130, function() ns.openArtPicker() end)
-  artBtn:SetPoint("TOPLEFT", 12, y - 2)
-  W.tooltip(artBtn, "Choose art", "The Horde crest, the page behind setup and Credits, and the Character backdrop, all from the game's own art. Same as /x art.")
-  y = y - 32
   local slider = W.slider(s, "Text scale", 0.8, 1.4, 0.05, function() return cdb().textScale or 1 end,
     function(v) cdb().textScale = v if ns.relayout then ns.relayout() end end, function(v) return ("%d%%"):format(v * 100 + 0.5) end)
   slider:SetPoint("TOPLEFT", 18, y - 12)
@@ -1222,7 +1218,6 @@ function ns.doReset()
   if main then main:Hide() end
   if ns.resetWindow then pcall(ns.resetWindow) end
   pcall(ns.updateMinimap)
-  pcall(ns.applyArt)
   p("reset to the defaults.")
   ns.showSplash()
 end
@@ -1314,7 +1309,7 @@ end
 ------------------------------------------------------------------------
 local function help()
   p("/x - open the window · /x flag - review a fight · /x export - copy your log · /x setup - redo setup")
-  p("/x art - pick the crest art · /x splash - show the splash page · /x reset - start over · /x probe - what this client offers")
+  p("/x splash - show the splash page · /x reset - start over · /x probe - what this client offers")
   p("/x bug - report a problem · /x test - why was that press quiet?")
   p("/x on · /x off · /x help")
 end
@@ -1329,7 +1324,6 @@ SlashCmdList["CROX"] = function(msg)
   elseif msg == "flag" then ns.Log.openReview()
   elseif msg == "export" then ns.Log.openExport()
   elseif msg == "setup" then ns.openSetup()
-  elseif msg == "art" then ns.openArtPicker()
   elseif msg == "splash" then ns.showSplash()
   elseif msg == "reset" then ns.confirmReset()
   elseif msg == "probe" then ns.Bug.probe()
@@ -1347,110 +1341,19 @@ BINDING_NAME_CROX2_FLAG = "Review a fight"
 function CROX2_FlagBinding() if ns.Log then ns.Log.openReview() end end
 
 ------------------------------------------------------------------------
--- Art browser (/x art): the game's own crests, painted backgrounds and book pages, side by side
+-- Painted areas: the art is fixed (plain dark behind setup, Credits and the Character section); players don't choose it
 ------------------------------------------------------------------------
--- painted areas that follow the player's choices: {frame, key, holder, dim}
-local painted = {}
-local ART_KEYS = {
-  page = {list = function() return W.PAGES end, label = "Setup and Credits page"},
-  charBg = {list = function() return {W.BACKGROUNDS[1], W.BACKGROUNDS[4]} end, label = "Character section backdrop"},
-}
-local function entryFor(key)
-  local list = ART_KEYS[key].list()
-  return list[(ns.db and ns.db[key]) or 1] or list[1]
-end
--- paint a frame with the chosen art for key; dim = how dark (0 none .. 1 black)
+-- paint a frame; dim = how dark (0 none .. 1 black)
 function ns.paintArea(frame, key, dim)
   local rec = {frame = frame, key = key, dim = dim or 0.5}
-  painted[#painted + 1] = rec
   rec.shade = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
   rec.shade:SetAllPoints(frame)
-  local function apply()
-    local e = entryFor(key)
-    rec.holder = W.paint(frame, e, rec.holder)
-    rec.holder:SetFrameLevel(math.max(0, frame:GetFrameLevel() or 0))
-    for _, t in ipairs(rec.holder.tex or {}) do t:SetDrawLayer("BACKGROUND", -1) end
-    rec.shade:SetColorTexture(0, 0, 0, e.none and 0 or rec.dim)
-  end
-  rec.apply = apply
-  apply()
+  local e = key == "charBg" and W.BACKGROUNDS[1] or W.PAGES[1]
+  rec.holder = W.paint(frame, e, rec.holder)
+  rec.holder:SetFrameLevel(math.max(0, frame:GetFrameLevel() or 0))
+  for _, t in ipairs(rec.holder.tex or {}) do t:SetDrawLayer("BACKGROUND", -1) end
+  rec.shade:SetColorTexture(0, 0, 0, e.none and 0 or rec.dim)
   return rec
-end
-function ns.applyArt()
-  W.applyArt()
-  for _, rec in ipairs(painted) do pcall(rec.apply) end
-end
-
-local browserFrame
-function ns.openArtPicker()
-  if not browserFrame then
-    local f = W.panel("CROX2ArtFrame", "cro/x - art from the game", 600, 470)
-    browserFrame = f
-    local cat = "art"
-    local CATS = {{"art", "Horde crest"}, {"page", ART_KEYS.page.label},
-      {"charBg", ART_KEYS.charBg.label}}
-    local hint = W.hint(f, "Click the one that looks best. Blank squares are art this game client doesn't have.")
-    hint:SetPoint("TOPLEFT", 16, -62)
-    local dd = W.dropdown(f, 240, function() return CATS end, function() return cat end, function(v) cat = v f:fill() end)
-    dd:SetPoint("TOPLEFT", 0, -28)
-    f.cells = {}
-    local function cell(i)
-      if f.cells[i] then return f.cells[i] end
-      local b = CreateFrame("Button", nil, f)
-      b:SetSize(130, 150)
-      local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
-      b:SetPoint("TOPLEFT", 20 + col * 142, -84 - row * 166)
-      b.art = CreateFrame("Frame", nil, b)
-      b.art:SetSize(120, 110)
-      b.art:SetPoint("TOP", 0, -4)
-      b.crest = b.art:CreateTexture(nil, "ARTWORK")
-      b.crest:SetAllPoints()
-      local hl = b:CreateTexture(nil, "HIGHLIGHT")
-      hl:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-      hl:SetBlendMode("ADD")
-      hl:SetAllPoints()
-      b.sel = b:CreateTexture(nil, "BACKGROUND")
-      b.sel:SetAllPoints()
-      b.sel:SetColorTexture(1, 0.82, 0, 0.15)
-      b.label = W.text(b, "", "GameFontHighlightSmall")
-      b.label:SetPoint("TOP", b.art, "BOTTOM", 0, -4)
-      b.label:SetWidth(126)
-      b.label:SetJustifyH("CENTER")
-      f.cells[i] = b
-      return b
-    end
-    function f:fill()
-      dd.refresh()
-      for _, b in ipairs(self.cells) do b:Hide() end
-      local list
-      if cat == "art" then list = {} for i, a in ipairs(W.CREST_ART) do list[i] = {label = a[6], crest = i} end
-      else list = ART_KEYS[cat].list() end
-      for i, e in ipairs(list) do
-        local b = cell(i)
-        b.crest:SetShown(e.crest ~= nil)
-        if e.crest then W.crest(b.crest, e.crest) end
-        b.painted = W.paint(b.art, (not e.crest) and e or {none = true}, b.painted)
-        if e.none and not e.crest then
-          b.dark = b.dark or b.art:CreateTexture(nil, "BACKGROUND")
-          b.dark:SetAllPoints()
-          b.dark:SetColorTexture(0.05, 0.05, 0.05, 1)
-          b.dark:Show()
-        elseif b.dark then b.dark:Hide() end
-        b.label:SetText(i .. ". " .. e.label)
-        b.sel:SetShown(((ns.db[cat]) or 1) == i)
-        b:SetScript("OnClick", function()
-          ns.db[cat] = i
-          ns.applyArt()
-          W.sound("click")
-          f:fill()
-          p(("%s: %s."):format(cat == "art" and "Horde crest" or ART_KEYS[cat].label, e.label))
-        end)
-        b:Show()
-      end
-    end
-    f:SetScript("OnShow", function() f:fill() end)
-  end
-  browserFrame:Show()
 end
 
 ------------------------------------------------------------------------
@@ -1607,7 +1510,6 @@ local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
   pcall(ns.updateMinimap)
-  pcall(ns.applyArt)
   if not ns.cdb or ns.isAlliance() or not ns.cdb.on then return end
   -- first run always shows it (that's where the choices are made); after that, only if "Show at login" is on
   if ns.cdb.splash or not ns.cdb.setupDone then

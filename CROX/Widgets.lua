@@ -195,7 +195,7 @@ end
 W.HORDE_CREST = "Interface\\TargetingFrame\\UI-PVP-Horde"
 
 -- Larger Horde emblems that ship with the game client. Which ones exist depends on the client version, so the
--- player picks the sharpest one that shows up (/x art, or Options > Crest art). {file, left, right, top, bottom}
+-- one is used for each screen (not player-chosen). {file, left, right, top, bottom}
 W.CREST_ART = {
   {"Interface\\TargetingFrame\\UI-PVP-Horde", 0, 0.62, 0, 0.62, "Target frame crest (small, always there)"},
   {"Interface\\Timer\\Horde-Logo", 0, 1, 0, 1, "Battleground timer logo"},
@@ -205,23 +205,15 @@ W.CREST_ART = {
   {"Interface\\WorldStateFrame\\HordeFlag", 0, 1, 0, 1, "Horde flag"},
   {"Interface\\PVPFrame\\PVP-Currency-Horde", 0, 1, 0, 1, "Honor crest"},
 }
--- put the chosen crest on a texture (textures given no index follow the player's choice when it changes)
-local followers = {}
+-- put a crest on a texture (the first one unless an index is given)
 function W.crest(tex, index)
-  if not index then followers[#followers + 1] = tex end
-  local a = W.CREST_ART[index or (ns.db and ns.db.art) or 1] or W.CREST_ART[1]
+  local a = W.CREST_ART[index or 1] or W.CREST_ART[1]
   tex:SetTexture(a[1])
   tex:SetTexCoord(a[2], a[3], a[4], a[5])
   return a
 end
-function W.applyArt()
-  local a = W.CREST_ART[(ns.db and ns.db.art) or 1] or W.CREST_ART[1]
-  for _, tex in ipairs(followers) do tex:SetTexture(a[1]) tex:SetTexCoord(a[2], a[3], a[4], a[5]) end
-end
-
 ------------------------------------------------------------------------
--- More of the game's own art: painted backgrounds and book pages. Each one is tried in the art browser
--- (/x art); a client that doesn't have a file just shows a blank square there.
+-- More of the game's own art: painted backgrounds and book pages. Only the plain dark entries are used now.
 -- kind "single": {file, l, r, t, b}; kind "quad": the game's four-piece paintings (talent trees, book pages)
 ------------------------------------------------------------------------
 W.BACKGROUNDS = {

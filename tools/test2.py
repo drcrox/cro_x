@@ -207,7 +207,7 @@ check("alliance character never speaks", nsent() == n0)
 print("errors in chat:", [m for m in H.chat.values() if "error" in m.lower()])
 H.me.faction = "Horde"; ns.refreshProfile()
 ns.showSplash(); check("splash opens", G.CROX2SplashFrame._shown)
-ns.openArtPicker(); check("art picker opens", G.CROX2ArtFrame._shown)
+check("no art picker", ns.openArtPicker is None and G.CROX2ArtFrame is None)
 lua.eval("function(f) return f._scripts.OnUpdate[1] end")(G.CROX2SplashFrame)(G.CROX2SplashFrame, 13)
 check("splash closes by itself", not G.CROX2SplashFrame._shown)
 r = lua.eval('''function(ns)
@@ -223,17 +223,7 @@ r = lua.eval('''function(ns)
   return v end''')(ns)
 check("splash re-open leaves the toggle alone", r == False, r)
 G.SlashCmdList.CROX("art")
-r = lua.eval('''function(ns)
-  local f = CROX2ArtFrame
-  local out = {}
-  for _, key in ipairs({"art", "bg", "page", "charBg"}) do
-    ns.db.art = ns.db.art
-    -- switch category by calling the dropdown setter path: fill with cat via clicking cells after setting
-  end
-  for i, b in ipairs(f.cells) do if b:IsShown() then b:Click() out[#out+1] = i end end
-  ns.db.bg = 2 ns.db.page = 2 ns.db.charBg = 2 ns.applyArt()
-  return #out end''')(ns)
-check("art browser cells click and every painted area repaints", r > 0, r)
+check("/x art does nothing now", G.CROX2ArtFrame is None)
 
 # --- multi-speaker groundwork
 r = lua.eval('''function(ns)

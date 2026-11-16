@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.20 · 2026-11-15
+- art choices removed: no art picker, /x art or Options button; art is fixed
+
 ## 0.57-alpha2.19 · 2026-11-15
 - Lines tab shows what can trigger each line
 
