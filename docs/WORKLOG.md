@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.16 · 2026-11-15
+- sets chooser is a small popout under the button, not pushing the list
+
 ## 0.57-alpha2.15 · 2026-11-15
 - Lines tab only ever lists lines the character can say; the show-everything switch is gone
 

@@ -686,7 +686,16 @@ local function buildLines(parent)
   local function changed() state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end
 
   -- the set chooser
-  local toggle = W.button(s, "", 250, function() state.open = not state.open changed() end)
+  local toggle = W.button(s, "", 250, function()
+    local pn = s.picker
+    if pn:IsShown() then pn:Hide()
+    else
+      state.open = true
+      pn:ClearAllPoints()
+      pn:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -4)
+      pn:Show()
+    end
+  end)
   toggle:SetPoint("TOPLEFT", 4, 0)
   W.tooltip(toggle, "Choose sets of lines", "Opens checkboxes for moments (opener, kill, potions...) and sources (baseline, class, drive, spec...). " ..
     "Tick as many as you like, in any combination. With nothing ticked, every line shows.")
@@ -699,51 +708,50 @@ local function buildLines(parent)
     ph:SetShown(state.search == "")
     changed()
   end)
-  local panel = CreateFrame("Frame", nil, s)
-  panel:Hide()
-  panel.mHead = W.heading(panel, "Moments")
-  panel.sHead = W.heading(panel, "Sources and tags")
+  -- the chooser is its own small window that pops out under the button (about its width), so the list never moves
+  local ROWH = 24
+  local panel = W.panel("CROX2LinesPicker", "Choose sets of lines", 276, 430)
+  local sf, content = W.scroll(panel)
+  sf:SetPoint("TOPLEFT", 10, -30)
+  sf:SetPoint("BOTTOMRIGHT", -30, 74)
   panel.mBoxes, panel.sBoxes = {}, {}
+  local y = -2
+  local mHead = W.heading(content, "Moments")
+  mHead:SetPoint("TOPLEFT", 4, y)
+  y = y - 24
   for _, it in ipairs(momentItems) do
     local key = it[1]
-    local c = W.check(panel, it[2], function(_, on) state.moments[key] = on or nil changed() end)
+    local c = W.check(content, it[2], function(_, on) state.moments[key] = on or nil changed() end)
+    c:SetPoint("TOPLEFT", 0, y)
     panel.mBoxes[#panel.mBoxes + 1] = c
+    y = y - ROWH
   end
+  y = y - 10
+  local sHead = W.heading(content, "Sources and tags")
+  sHead:SetPoint("TOPLEFT", 4, y)
+  y = y - 24
   for _, it in ipairs(SOURCE_LIST) do
     local key = it[1]
-    local c = W.check(panel, it[2], function(_, on) state.sources[key] = on or nil changed() end)
+    local c = W.check(content, it[2], function(_, on) state.sources[key] = on or nil changed() end)
+    c:SetPoint("TOPLEFT", 0, y)
     panel.sBoxes[#panel.sBoxes + 1] = c
+    y = y - ROWH
   end
-  panel.clear = W.button(panel, "Clear ticks (show all)", 170, function()
+  content:SetHeight(-y + 8)
+  panel.note = W.hint(panel, "Nothing ticked shows every line.")
+  panel.note:SetPoint("BOTTOMLEFT", 14, 48)
+  panel.clear = W.button(panel, "Clear ticks", 120, function()
     state.moments, state.sources = {}, {}
     for _, c in ipairs(panel.mBoxes) do c:SetChecked(false) end
     for _, c in ipairs(panel.sBoxes) do c:SetChecked(false) end
     changed()
   end)
-
-  -- lay the checkboxes out in columns for the current width; returns the panel's height
-  local COLW, ROWH = 170, 24
-  local function placePanel(w)
-    local cols = math.max(1, math.floor((w - 16) / COLW))
-    local y = 0
-    panel.mHead:ClearAllPoints() panel.mHead:SetPoint("TOPLEFT", 4, y)
-    y = y - 22
-    for i, c in ipairs(panel.mBoxes) do
-      c:ClearAllPoints()
-      c:SetPoint("TOPLEFT", ((i - 1) % cols) * COLW, y - math.floor((i - 1) / cols) * ROWH)
-    end
-    y = y - math.ceil(#panel.mBoxes / cols) * ROWH - 8
-    panel.sHead:ClearAllPoints() panel.sHead:SetPoint("TOPLEFT", 4, y)
-    y = y - 22
-    for i, c in ipairs(panel.sBoxes) do
-      c:ClearAllPoints()
-      c:SetPoint("TOPLEFT", ((i - 1) % cols) * COLW, y - math.floor((i - 1) / cols) * ROWH)
-    end
-    y = y - math.ceil(#panel.sBoxes / cols) * ROWH - 6
-    panel.clear:ClearAllPoints() panel.clear:SetPoint("TOPLEFT", 4, y)
-    y = y - 30
-    return -y
-  end
+  panel.clear:SetPoint("BOTTOMLEFT", 12, 14)
+  panel.done = W.button(panel, "Done", 90, function() panel:Hide() end)
+  panel.done:SetPoint("BOTTOMRIGHT", -12, 14)
+  panel:HookScript("OnHide", function() state.open = false end)
+  s:SetScript("OnHide", function() panel:Hide() end)
+  s.picker = panel
 
   s.count = W.heading(s, "")
   s.rows = {}
@@ -795,19 +803,9 @@ local function buildLines(parent)
   end
 
   function s:refresh()
-    local w = self.w or 560
-    toggle:SetText(("%s  Sets: %s · %s"):format(state.open and "v" or ">",
+    toggle:SetText(("Sets: %s · %s"):format(
       next(state.moments) and (countKeys(state.moments) .. " moment" .. (countKeys(state.moments) == 1 and "" or "s")) or "all moments",
       next(state.sources) and (countKeys(state.sources) .. " source" .. (countKeys(state.sources) == 1 and "" or "s")) or "all sources"))
-    local panelH = 0
-    if state.open then
-      panelH = placePanel(w)
-      panel:ClearAllPoints()
-      panel:SetPoint("TOPLEFT", 4, -30)
-      panel:SetPoint("RIGHT", self, "RIGHT", -4, 0)
-      panel:SetHeight(panelH)
-      panel:Show()
-    else panel:Hide() end
     local shown = {}
     for _, o in ipairs(gather()) do
       local okSrc = not next(state.sources) or state.sources[sourceKind(o)]
@@ -816,9 +814,9 @@ local function buildLines(parent)
     end
     self.count:SetText(("%d line%s your character can say"):format(#shown, #shown == 1 and "" or "s"))
     self.count:ClearAllPoints()
-    self.count:SetPoint("TOPLEFT", 8, -32 - (state.open and panelH + 6 or 0))
+    self.count:SetPoint("TOPLEFT", 8, -32)
     for _, r in ipairs(self.rows) do r:Hide() end
-    local y = -56 - (state.open and panelH + 6 or 0)
+    local y = -56
     local limit = math.min(#shown, state.limit)
     for i = 1, limit do
       local o = shown[i]
@@ -865,7 +863,6 @@ local function buildLines(parent)
   end
   function s:layout(w)
     for _, r in ipairs(self.rows) do r.txt:SetWidth(w - 100) r.sub:SetWidth(w - 100) end
-    if self.w ~= w then self.w = w if state.open then self:refresh() end end
     return self.height or 200
   end
   s._state = state

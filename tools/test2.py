@@ -157,8 +157,8 @@ lt = lua.eval('''function(ns)
   st.sources = {class = true, spec = true}; out.classSpec = count()
   st.moments = {kill = true}; st.sources = {base = true}; out.killBase = count()
   st.moments = {}; st.sources = {}; st.search = "zzzzqq"; out.none = count()
-  st.search = ""; st.open = true; s:refresh(); out.openOk = true
-  st.open = false; st.limit = 100; s:refresh()
+  st.search = ""; s.picker:Show(); s:refresh(); out.openOk = s.picker:IsShown() and s.picker:GetWidth() < 300
+  s.picker:Hide(); st.limit = 100; s:refresh()
   return out end''')(ns)
 def n_of(t): return int(str(t).split(" ")[0])
 check("lines tab starts with every moment and source, and has no switch to show lines the character cannot say", lt["defaultMoments"], lt["default"])
