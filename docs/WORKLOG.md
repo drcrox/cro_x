@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.15 · 2026-11-15
+- Lines tab only ever lists lines the character can say; the show-everything switch is gone
+
 ## 0.57-alpha2.14 · 2026-11-15
 - Lines tab: shows everything by default, tick boxes combine moments and sources
 

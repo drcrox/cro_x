@@ -680,7 +680,7 @@ local function countKeys(t) local n = 0 for _ in pairs(t) do n = n + 1 end retur
 local function buildLines(parent)
   local s = CreateFrame("Frame", nil, parent)
   -- empty moments / sources = everything; ticking some narrows to just those, in any combination
-  local state = {moments = {}, sources = {}, search = "", onlyMine = false, limit = 100, open = false}
+  local state = {moments = {}, sources = {}, search = "", limit = 100, open = false}
   local momentItems = {}
   for _, l in ipairs({ARCH_LIST, MOMENT_LIST, EXTRA_LIST}) do for _, it in ipairs(l) do momentItems[#momentItems + 1] = it end end
   local function changed() state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end
@@ -699,11 +699,6 @@ local function buildLines(parent)
     ph:SetShown(state.search == "")
     changed()
   end)
-  local only = W.check(s, "Only lines this character can say", function(_, on) state.onlyMine = on changed() end)
-  only:SetPoint("TOPLEFT", 2, -28)
-  only:SetChecked(false)
-  W.tooltip(only, "Only lines this character can say", "Hides lines your temperament, race, class or tags rule out. Off by default, so you can see every line.")
-
   local panel = CreateFrame("Frame", nil, s)
   panel:Hide()
   panel.mHead = W.heading(panel, "Moments")
@@ -808,7 +803,7 @@ local function buildLines(parent)
     if state.open then
       panelH = placePanel(w)
       panel:ClearAllPoints()
-      panel:SetPoint("TOPLEFT", 4, -56)
+      panel:SetPoint("TOPLEFT", 4, -30)
       panel:SetPoint("RIGHT", self, "RIGHT", -4, 0)
       panel:SetHeight(panelH)
       panel:Show()
@@ -817,14 +812,13 @@ local function buildLines(parent)
     for _, o in ipairs(gather()) do
       local okSrc = not next(state.sources) or state.sources[sourceKind(o)]
       local okSearch = state.search == "" or o.line.t:lower():find(state.search, 1, true)
-      if okSrc and okSearch and (not state.onlyMine or canSay(o)) then shown[#shown + 1] = o end
+      if okSrc and okSearch and canSay(o) then shown[#shown + 1] = o end
     end
-    self.count:SetText(("%d line%s%s"):format(#shown, #shown == 1 and "" or "s",
-      state.onlyMine and " your character can say" or ""))
+    self.count:SetText(("%d line%s your character can say"):format(#shown, #shown == 1 and "" or "s"))
     self.count:ClearAllPoints()
-    self.count:SetPoint("TOPLEFT", 8, -58 - (state.open and panelH + 6 or 0))
+    self.count:SetPoint("TOPLEFT", 8, -32 - (state.open and panelH + 6 or 0))
     for _, r in ipairs(self.rows) do r:Hide() end
-    local y = -82 - (state.open and panelH + 6 or 0)
+    local y = -56 - (state.open and panelH + 6 or 0)
     local limit = math.min(#shown, state.limit)
     for i = 1, limit do
       local o = shown[i]

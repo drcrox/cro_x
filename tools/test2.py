@@ -149,7 +149,7 @@ lt = lua.eval('''function(ns)
     return s.count._text or "" end
   local out = {}
   out.default = count()
-  out.defaultMoments = next(st.moments) == nil and next(st.sources) == nil and st.onlyMine == false
+  out.defaultMoments = next(st.moments) == nil and next(st.sources) == nil and st.onlyMine == nil
   st.limit = 100000
   st.moments = {opener = true}; out.opener = count()
   st.moments = {opener = true, heavy = true}; out.two = count()
@@ -161,7 +161,7 @@ lt = lua.eval('''function(ns)
   st.open = false; st.limit = 100; s:refresh()
   return out end''')(ns)
 def n_of(t): return int(str(t).split(" ")[0])
-check("lines tab starts with every moment, every source and nothing hidden", lt["defaultMoments"], lt["default"])
+check("lines tab starts with every moment and source, and has no switch to show lines the character cannot say", lt["defaultMoments"], lt["default"])
 check("lines tab default shows the whole set", n_of(lt["default"]) > n_of(lt["opener"]) > 0, (lt["default"], lt["opener"]))
 check("two moments combine (more than one, fewer than all)", n_of(lt["two"]) > n_of(lt["opener"]) and n_of(lt["two"]) < n_of(lt["default"]), (lt["opener"], lt["two"]))
 check("two sources combine", n_of(lt["classSpec"]) > n_of(lt["class"]) > 0, (lt["class"], lt["classSpec"]))
