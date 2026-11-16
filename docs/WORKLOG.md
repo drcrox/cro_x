@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.11 · 2026-11-15
+- Professions now read only your own list (the 'all trade skill lines' source named every profession and is gone). Spec read from the new talent trees by points spent per tree. /x probe now also lists the talent trees.
+
 ## 0.57-alpha2.10 · 2026-11-15
 - Professions and spec: read through the modern profession list and trade-skill lines as well as the classic skill list; fall back to the chosen specialization when there are no classic talent trees; read again 4 and 12 seconds after login. New /x probe window shows what this client offers, to copy and paste.
 

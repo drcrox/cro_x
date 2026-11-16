@@ -312,3 +312,37 @@ r = lua.eval('''function(ns)
   return {text = t, shown = CROX2ProbeFrame:IsShown()}
 end''')(ns)
 check("/x probe builds a report and shows it", r["shown"] and "PROFESSIONS" in r["text"] and "TALENTS AND SPEC" in r["text"] and "cro/x read:" in r["text"])
+
+# --- modern profession list and the new talent system (stubs shaped like Forever's answers)
+r = lua.eval('''function(ns)
+  local saveSkills = GetNumSkillLines
+  GetNumSkillLines = nil
+  function GetProfessions() return 6, 8, 5, 9, 7 end
+  local pn = {[6] = "Blacksmithing", [8] = "Mining", [5] = "First Aid", [9] = "Fishing", [7] = "Cooking"}
+  function GetProfessionInfo(i) return pn[i], 136241, 91, 150 end
+  C_TradeSkillUI = {GetAllProfessionTradeSkillLines = function() return {1, 2, 3} end,
+    GetProfessionInfoBySkillLineID = function(id) return {professionName = "Alchemy"} end}
+  local saveTabs = GetNumTalentTabs
+  GetNumTalentTabs = nil
+  C_ClassTalents = {GetActiveConfigID = function() return 99 end}
+  local nodes = {[1] = {10, 11}, [2] = {20, 21, 22}, [3] = {30}}
+  local ranks = {[10] = 5, [11] = 6, [20] = 4, [21] = 3, [22] = 3, [30] = 0}
+  C_Traits = {
+    GetConfigInfo = function(c) return {name = "x", treeIDs = {1, 2, 3}} end,
+    GetTreeNodes = function(t) return nodes[t] end,
+    GetNodeInfo = function(c, n) return {currentRank = ranks[n], posY = 100, posX = 1, maxRanks = 5} end,
+  }
+  ns.refreshProfile()
+  local profs, spec = {}, {}
+  for k in pairs(ns.profile.profs) do profs[#profs + 1] = k end
+  table.sort(profs)
+  for k, v in pairs(ns.profile.spec) do spec[#spec + 1] = k .. v end
+  table.sort(spec)
+  local text = ns.Bug.probeText()
+  GetNumSkillLines, GetNumTalentTabs, GetProfessions, C_TradeSkillUI, C_ClassTalents, C_Traits = saveSkills, saveTabs, nil, nil, nil, nil
+  ns.refreshProfile()
+  return {profs = table.concat(profs, ","), spec = table.concat(spec, ","), text = text}
+end''')(ns)
+check("professions come from the modern list only", r["profs"] == "blacksmithing,cooking,first_aid,fishing,mining", r["profs"])
+check("spec read from the new talent trees (11 and 10 points, none in the third)", r["spec"] == "Arms2,Fury2,Protection0" or r["spec"] == "Arms2,Fury2,Protection0", r["spec"])
+check("probe lists the talent trees", "tree 1:" in r["text"] and "traits config 99" in r["text"])

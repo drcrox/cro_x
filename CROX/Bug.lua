@@ -197,6 +197,52 @@ function Bug.probeText()
   local CT = C_ClassTalents
   add("  C_ClassTalents.GetActiveConfigID = " .. call(CT and CT.GetActiveConfigID))
   add("  GetNumTalentGroups = " .. call(GetNumTalentGroups))
+  local TR = C_Traits
+  local cid = CT and tonumber((select(2, pcall(CT.GetActiveConfigID or function() end))))
+  if TR and cid then
+    local okc, cfg = pcall(TR.GetConfigInfo, cid)
+    if okc and type(cfg) == "table" then
+      local ids = {}
+      for _, t in ipairs(cfg.treeIDs or {}) do ids[#ids + 1] = show(t) end
+      add("traits config " .. cid .. ": name " .. show(cfg.name) .. ", type " .. show(cfg.type) .. ", treeIDs [" .. table.concat(ids, ",") .. "]")
+      for ti, tid in ipairs(cfg.treeIDs or {}) do
+        if ti > 4 then break end
+        local okn, nodes = pcall(TR.GetTreeNodes, tid)
+        nodes = okn and type(nodes) == "table" and nodes or {}
+        local ranked, spent, minY, maxY, sample, subs = 0, 0, nil, nil, nil, {}
+        for _, nid in ipairs(nodes) do
+          local oki, info = pcall(TR.GetNodeInfo, cid, nid)
+          if oki and type(info) == "table" then
+            local rk = tonumber(info.currentRank) or 0
+            if not sample then sample = info end
+            if info.subTreeID then subs[tostring(info.subTreeID)] = true end
+            if rk > 0 then
+              ranked, spent = ranked + 1, spent + rk
+              local y = tonumber(info.posY)
+              if y then minY = math.min(minY or y, y) maxY = math.max(maxY or y, y) end
+            end
+          end
+        end
+        local sl = {}
+        for k in pairs(subs) do sl[#sl + 1] = k end
+        add(("  tree %s: %d nodes, %d with points (%d points), posY of ranked nodes %s..%s, subTreeIDs [%s]"):format(
+          show(tid), #nodes, ranked, spent, show(minY), show(maxY), table.concat(sl, ",")))
+        if sample then
+          add(("    sample node: posX %s posY %s maxRanks %s subTreeID %s groupIDs %s"):format(show(sample.posX), show(sample.posY),
+            show(sample.maxRanks), show(sample.subTreeID), show(sample.groupIDs)))
+        end
+        add("    GetTreeInfo = " .. call(TR.GetTreeInfo, cid, tid))
+        if sl[1] and TR.GetSubTreeInfo then
+          local oks, st = pcall(TR.GetSubTreeInfo, cid, tonumber(sl[1]))
+          add("    GetSubTreeInfo(" .. sl[1] .. ") name = " .. (oks and type(st) == "table" and show(st.name) or "missing"))
+        end
+      end
+    else
+      add("traits config " .. cid .. ": GetConfigInfo = " .. show(cfg))
+    end
+  else
+    add("C_Traits: " .. (TR and "present, no active config" or "missing"))
+  end
   add("spell tabs: GetNumSpellTabs = " .. call(GetNumSpellTabs))
   local SB = C_SpellBook
   add("  C_SpellBook.GetNumSpellBookSkillLines = " .. call(SB and SB.GetNumSpellBookSkillLines))

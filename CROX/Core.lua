@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.10"
+local BUILD = "0.57-alpha2.11"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -113,8 +113,8 @@ local function addProf(out, name)
   if name and PROF_KEYS[name:lower()] then out[PROF_KEYS[name:lower()]] = true end
 end
 
--- Professions, read every way the game offers: the classic skill list, the modern profession list, and the
--- trade-skill lines. Whichever this client has fills in what it can.
+-- Professions: the classic skill list where the client has it, otherwise the modern profession list (the one
+-- Forever uses). The trade-skill-line list is NOT used: it names every profession in the game, not yours.
 local function readProfessions()
   local out = {}
   for i = 1, (num(safe(GetNumSkillLines)) or 0) do
@@ -128,13 +128,6 @@ local function readProfessions()
       if idx then addProf(out, (safe(GetProfessionInfo, idx))) end
     end
   end
-  local TS = C_TradeSkillUI
-  if TS and TS.GetAllProfessionTradeSkillLines then
-    for _, id in ipairs(safe(TS.GetAllProfessionTradeSkillLines) or {}) do
-      local info = safe(TS.GetProfessionInfoBySkillLineID, id)
-      if type(info) == "table" then addProf(out, info.parentProfessionName or info.professionName) end
-    end
-  end
   return out
 end
 
@@ -145,6 +138,45 @@ local function currentSpecName()
   local info = (C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo) or GetSpecializationInfo
   local r = {safe(info, idx)}
   return str(r[2])
+end
+
+-- Talent trees in the newer system (Forever): points spent per tree, turned into bands the way the classic rows
+-- unlock (row 3 opens at 10 points in a tree, row 5 at 20). Returns nil when this client doesn't offer it
+-- or the trees can't be named.
+local function readSpecTraits()
+  local CT, TR = C_ClassTalents, C_Traits
+  if not (CT and TR and TR.GetConfigInfo and TR.GetTreeNodes and TR.GetNodeInfo) then return nil end
+  local cid = num(safe(CT.GetActiveConfigID))
+  if not cid then return nil end
+  local cfg = safe(TR.GetConfigInfo, cid)
+  if type(cfg) ~= "table" or type(cfg.treeIDs) ~= "table" then return nil end
+  local class = profile.class or ""
+  local order, data = SPEC_ORDER[class] or {}, CROX2_SPEC and CROX2_SPEC[class]
+  if not data then return nil end
+  local spent = {}
+  for ti, tid in ipairs(cfg.treeIDs) do
+    for _, nid in ipairs(safe(TR.GetTreeNodes, tid) or {}) do
+      local info = safe(TR.GetNodeInfo, cid, nid)
+      if type(info) == "table" then
+        local rank = num(info.currentRank) or 0
+        if rank > 0 then
+          local name
+          if info.subTreeID and TR.GetSubTreeInfo then
+            local st = safe(TR.GetSubTreeInfo, cid, info.subTreeID)
+            name = type(st) == "table" and str(st.name)
+          end
+          if not (name and data[name]) then name = (#cfg.treeIDs == #order) and order[ti] or nil end
+          if name and data[name] then spent[name] = (spent[name] or 0) + rank end
+        end
+      end
+    end
+  end
+  local out = {}
+  for name in pairs(data) do
+    local pts = spent[name] or 0
+    out[name] = pts >= 20 and 3 or pts >= 10 and 2 or pts >= 1 and 1 or 0
+  end
+  return next(spent) and out or nil
 end
 
 -- spec bands unlocked per tree: {["Arms"] = 2, ...} (1 early, 2 middle, 3 deep)
@@ -167,7 +199,8 @@ local function readSpec()
       out[tname] = deepest >= 5 and 3 or deepest >= 3 and 2 or deepest >= 1 and 1 or 0
     end
   end
-  -- no classic talent trees here: use the chosen specialization's name, counted as fully unlocked
+  if next(out) == nil then out = readSpecTraits() or out end
+  -- nothing else worked: use the chosen specialization's name, counted as fully unlocked
   if next(out) == nil then
     local name = currentSpecName()
     local data = CROX2_SPEC and CROX2_SPEC[profile.class or ""]
