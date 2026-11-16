@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.60-beta.5 · 2026-11-15
+- Setup: name in a class-coloured box (first and last from Total RP 3), flavor text under the dropdowns, Another One button
+
 ## 0.60-beta.4 · 2026-11-15
 - enemy kinds in the sim (Enemy dropdown); fake users renamed simulated players (SimP)
 

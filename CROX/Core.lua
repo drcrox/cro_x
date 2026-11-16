@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.60"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.60-beta.4"
+local BUILD = "0.60-beta.5"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -251,6 +251,31 @@ local function refreshProfile()
   profile.spec = readSpec()
 end
 ns.refreshProfile = refreshProfile
+
+-- The name to show for the character: first and last name from Total RP 3 when it is loaded and has them, otherwise
+-- the game's character name. Only displayed on the Setup page; never stored or sent.
+function ns.fullName()
+  local first, last
+  pcall(function()
+    local p = AddOn_TotalRP3 and AddOn_TotalRP3.Player and AddOn_TotalRP3.Player.GetCurrentUser and AddOn_TotalRP3.Player.GetCurrentUser()
+    if p then
+      first = p.GetFirstName and p:GetFirstName()
+      last = p.GetLastName and p:GetLastName()
+    end
+    if (not first or first == "") and TRP3_API and TRP3_API.profile and TRP3_API.profile.getData then
+      local ch = TRP3_API.profile.getData("player/characteristics")
+      if type(ch) == "table" then first, last = ch.FN, ch.LN end
+    end
+  end)
+  if type(first) ~= "string" or first == "" then first = profile.name or "" end
+  if type(last) ~= "string" or last == "" then return first end
+  return first .. " " .. last
+end
+-- the player's class colour as r, g, b (nil when the game does not have one)
+function ns.classColor(classFile)
+  local c = RAID_CLASS_COLORS and classFile and RAID_CLASS_COLORS[classFile]
+  if c and c.r then return c.r, c.g, c.b end
+end
 
 -- homeland options for this character's race
 function ns.homelands()

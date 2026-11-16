@@ -887,6 +887,43 @@ check("each creature type reaches the addon as that type", r["types"] == "ok", r
 check("an Alliance player enemy has faction, race and is a player; a boss is flagged", r["player"] and r["boss"], r)
 check("a random mix fights several kinds", r["kinds"] >= 5, r["kinds"])
 
+# Setup page: the name box (full name, class colour) and the choices with their flavor text underneath
+r = lua.eval('''function(ns, H)
+  local out = {}
+  local savedRCC, savedTRP = RAID_CLASS_COLORS, AddOn_TotalRP3
+  RAID_CLASS_COLORS = {WARRIOR = {r = 0.78, g = 0.61, b = 0.43}}
+  ns.profile.name, ns.profile.class = "Warhorn", "WARRIOR"
+  ns.openSection("home")
+  local s = ns._sections.home
+  s:refreshChoices()
+  local t = s.who:GetText() or ""
+  out.plainName = t:find("Warhorn", 1, true) ~= nil and t:find("Stonespire", 1, true) == nil
+  out.classColour = t:find("|cffc79b6e", 1, true) ~= nil or t:find("|cffc89c6e", 1, true) ~= nil or t:find("|cffc79c6e", 1, true) ~= nil
+  AddOn_TotalRP3 = {Player = {GetCurrentUser = function() return {GetFirstName = function() return "Warhorn" end, GetLastName = function() return "Stonespire" end} end}}
+  s:refreshChoices()
+  t = s.who:GetText() or ""
+  out.fullName = t:find("Warhorn Stonespire", 1, true) ~= nil
+  out.boxed = s.whoBox ~= nil and s.who._parent == s.whoBox
+  RAID_CLASS_COLORS, AddOn_TotalRP3 = savedRCC, savedTRP
+  s:refreshChoices()
+  -- the button and the flavor text under each dropdown
+  local btn
+  for _, ch in ipairs(H.frames) do if ch._text == "Another One" then btn = ch end end
+  out.another = btn ~= nil
+  local under = true
+  for kind, hint in pairs(s.hints) do
+    local dd = s.dds[kind]
+    local pt = hint._points and hint._points[1]
+    if pt and pt[2] ~= dd then under = false end
+  end
+  out.under = under
+  return out
+end''')(ns, H)
+r = dict(r)
+check("the name sits in its own box, in the class colour", r["boxed"] and r["plainName"] and r["classColour"], r)
+check("the name shows first and last from Total RP 3 when it is there", r["fullName"], r)
+check("the button says Another One and the flavor text hangs under its dropdown", r["another"] and r["under"], r)
+
 # --- Setup page: Character tags tabs, with a box on what the character has
 r = lua.eval('''function(ns)
   ns.openSection("home")

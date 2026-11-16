@@ -219,8 +219,23 @@ local function buildHome(parent)
   title:SetText("Combat Roleplay Options")
   title:SetPoint("CENTER", 0, 0)
   s.title = title
-  s.who = W.text(s, "", "GameFontHighlight")
-  s.who:SetPoint("TOP", card, "BOTTOM", 0, -6)
+  -- the character's name, in a box like the other headers, in the class colour
+  local whoBox = CreateFrame("Frame", nil, s)
+  whoBox:SetPoint("TOP", card, "BOTTOM", 0, -6)
+  whoBox:SetPoint("LEFT", s, "LEFT", 8, 0)
+  whoBox:SetPoint("RIGHT", s, "RIGHT", -8, 0)
+  whoBox:SetHeight(34)
+  local wbg = whoBox:CreateTexture(nil, "BACKGROUND")
+  wbg:SetAllPoints()
+  wbg:SetColorTexture(0, 0, 0, 0.62)
+  for _, edge in ipairs({"TOP", "BOTTOM"}) do
+    local ln = whoBox:CreateTexture(nil, "ARTWORK")
+    ln:SetPoint(edge .. "LEFT", 20, 0) ln:SetPoint(edge .. "RIGHT", -20, 0) ln:SetHeight(1)
+    ln:SetColorTexture(0.78, 0.6, 0.15, 0.9)
+  end
+  s.whoBox = whoBox
+  s.who = W.text(whoBox, "", "GameFontNormalLarge")
+  s.who:SetPoint("CENTER", 0, 0)
 
   local function dark(f)
     local t = f:CreateTexture(nil, "BACKGROUND")
@@ -230,43 +245,45 @@ local function buildHome(parent)
 
   -- who are you: the five choices, each with a line of flavor, then an example line
   local plate = CreateFrame("Frame", nil, s)
-  plate:SetPoint("TOP", s.who, "BOTTOM", 0, -12)
+  plate:SetPoint("TOP", whoBox, "BOTTOM", 0, -8)
   plate:SetPoint("LEFT", s, "LEFT", 8, 0)
   plate:SetPoint("RIGHT", s, "RIGHT", -8, 0)
-  plate:SetHeight(40 + #CHOICES * 34 + 44)
+  local ROW = 54          -- a choice's row: the dropdown, with its line of flavor text underneath
+  plate:SetHeight(40 + #CHOICES * ROW + 44)
   dark(plate)
   local head = W.heading(plate, "Who are you?")
   head:SetPoint("TOP", plate, "TOP", 0, -10)
   local grp = CreateFrame("Frame", nil, plate)
-  grp:SetSize(560, #CHOICES * 34)
+  grp:SetSize(560, #CHOICES * ROW)
   grp:SetPoint("TOP", plate, "TOP", 0, -34)
   s.grp = grp
   s.dds, s.hints = {}, {}
   for i, ch in ipairs(CHOICES) do
     local kind = ch[1]
-    local y = -(i - 1) * 34
+    local y = -(i - 1) * ROW
     local label = W.text(grp, ch[2], "GameFontNormal")
     label:SetPoint("TOPLEFT", 0, y - 6)
     local dd = W.dropdown(grp, 170, function() return choiceItems(kind) end, function() return cdb()[kind] end,
       function(v) cdb()[kind] = v s:refreshChoices(kind) end)
     dd:SetPoint("TOPLEFT", 100, y + 2)
     local hint = W.text(grp, "", "GameFontHighlightSmall")
-    hint:SetPoint("LEFT", dd, "RIGHT", -2, 2)
+    hint:SetPoint("TOPLEFT", dd, "BOTTOMLEFT", 20, 2)
     hint:SetPoint("RIGHT", grp, "RIGHT", 0, 0)
-    hint:SetHeight(30)
+    hint:SetHeight(24)
     hint:SetWordWrap(true)
-    hint:SetJustifyV("MIDDLE")
+    hint:SetJustifyV("TOP")
+    hint:SetJustifyH("LEFT")
     s.dds[kind] = dd
     s.hints[kind] = hint
   end
   local ex = W.text(plate, "", "GameFontHighlight")
   ex:SetPoint("TOPLEFT", grp, "BOTTOMLEFT", 0, -8)
-  ex:SetPoint("RIGHT", grp, "RIGHT", -84, 0)
+  ex:SetPoint("RIGHT", grp, "RIGHT", -108, 0)
   ex:SetHeight(32)
   ex:SetWordWrap(true)
   ex:SetJustifyV("TOP")
   s.example = ex
-  local another = W.button(plate, "Another", 76, function() s:rollExample() end)
+  local another = W.button(plate, "Another One", 100, function() s:rollExample() end)
   another:SetPoint("TOPRIGHT", grp, "BOTTOMRIGHT", 0, -6)
   W.tooltip(another, "Another example", "Another line in your character's voice. Only you see this.")
   function s:rollExample(kind)
@@ -554,7 +571,11 @@ local function buildHome(parent)
     self.raidHint:SetText(est(c.raidChatty or 3))
     self:layoutSpeak()
     local pf = ns.profile
-    self.who:SetText(("%s · %s %s"):format(pf.name or "", pf.race or "", cap((pf.class or ""):lower())))
+    local nm = ns.fullName and ns.fullName() or pf.name or ""
+    local r, g, b
+    if ns.classColor then r, g, b = ns.classColor(pf.class) end
+    local hex = r and ("|cff%02x%02x%02x"):format(math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5)) or "|cffffd100"
+    self.who:SetText(("%s%s|r  |cffbbbbbb· %s %s|r"):format(hex, nm, pf.race or "", cap((pf.class or ""):lower())))
     self:refreshTags()
     self.show:SetChecked(c.splash ~= false)
   end
@@ -563,7 +584,7 @@ local function buildHome(parent)
     self.w = w
     self.grp:SetWidth(math.max(380, math.min(640, w - 40)))
     self:layoutTags(w)
-    local h = 6 + 54 + 6 + 18 + 12 + plate:GetHeight() + 8 + plate2:GetHeight() + 8 + plate3:GetHeight() + 8 + 14 + 8 + 30 + 16
+    local h = 6 + 54 + 6 + 34 + 8 + plate:GetHeight() + 8 + plate2:GetHeight() + 8 + plate3:GetHeight() + 8 + 14 + 8 + 30 + 16
     self.height = h
     return h
   end
