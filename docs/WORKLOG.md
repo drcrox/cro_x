@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.32 · 2026-11-15
+- Pull and kill baseline tiers
+
 ## 0.57-alpha2.31 · 2026-11-15
 - Speech budget pacing, five new spreads, loudest-member party budget
 

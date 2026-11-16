@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.31"
+local BUILD = "0.57-alpha2.32"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -962,10 +962,18 @@ ns.debuffQueue = debuffQueue
 ------------------------------------------------------------------------
 -- The press
 ------------------------------------------------------------------------
+-- How often the moments that mark a fight should speak, as a baseline set with the designer (2026-11-15):
+-- often / sometimes / rarely, each a chance at the Normal pace (the other paces scale it). Low health and a new
+-- debuff are already always-or-nearly-always (clutch is a big moment; debuff call-outs only wait for the budget).
+local TIER = {often = 0.7, sometimes = 0.33, rarely = 0.1}
+local SITUATION = {opener = "sometimes", kill = "sometimes"}
+ns.SITUATION = SITUATION
 local function chanceOK(moment, big)
   if big then return true end
   local base = FREQ[moment] or 25
   local mult = (CHATTY[ns.chattyNow()] or CHATTY[3]).mult
+  local tier = SITUATION[moment] and TIER[SITUATION[moment]]
+  if tier then base = tier * 100 / mult * math.max(0.3, math.min(1.9, mult / 0.75)) end
   local t = now()
   local since = t - lastSpoke
   if ns.G and ns.G.sinceAny then since = math.min(since, ns.G.sinceAny(t)) end

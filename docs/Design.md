@@ -236,3 +236,8 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 - Party: the group shares one budget (cap 2.5) refilled at the **loudest member's** rate, so quiet characters are not starved by a chatty one. Levels ride along on the HI and SP messages (a trailing field; older builds ignore it). Hold after anyone speaks is 3 seconds; one voice cannot take two turns in 15 seconds.
 - Simulations behind this are in tools/sim (party2: party caps, party3: budget vs window, party4: floor and refractory variants). The sim measures spacing only; how it feels in a fight is for alpha play and /x flag to decide. Multipliers are first guesses, to be retuned from logs.
 - Parked next: situation boosts (pull, kill, low health, first big cooldown) as a one-number-per-moment table, once testers say what should always or never speak.
+
+### Moment baseline (2026-11-15, alpha2.32)
+- Designer's baseline answers: the pull sometimes, the kill sometimes, low health often, a new enemy / debuff / first big cooldown often.
+- Built as `SITUATION` + `TIER` in Core.lua (often 70%, sometimes 33%, rarely 10% at Normal pace; other paces scale it by 0.3 to 1.9). Applied to the opener (the pull) and the kill. Low health is already always (clutch is a big moment) and debuff call-outs only wait for the budget.
+- Not built (no clean signal yet): a new enemy joining, and first use of a big cooldown in a fight. Parked until alpha logs show whether they are needed.
