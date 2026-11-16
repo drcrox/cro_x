@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.30"
+local BUILD = "0.57-alpha2.31"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -654,16 +654,24 @@ ns.channelFor = channelFor
 ------------------------------------------------------------------------
 -- Five paces. mult scales how often a press speaks; gap = least seconds between lines; perMin = most lines a minute.
 -- est is the rough number of lines a minute to expect in a fight.
+-- Pace. Each level has a target spread of lines a minute, a rate (the middle of the spread, used to refill the speech
+-- budget) and a chance multiplier. In a party the loudest member's rate sets the whole party's budget.
 local CHATTY = {
-  [1] = {name = "Hushed", est = "under 1 a minute", mult = 0.35, gap = 30, perMin = 1},
-  [2] = {name = "Quiet", est = "1-2 a minute", mult = 0.6, gap = 20, perMin = 2},
-  [3] = {name = "Normal", est = "2-4 a minute", mult = 1.0, gap = 10, perMin = 4},
-  [4] = {name = "Lively", est = "4-6 a minute", mult = 1.5, gap = 7, perMin = 6},
-  [5] = {name = "Chatterbox", est = "6-9 a minute", mult = 2.2, gap = 5, perMin = 9},
+  [1] = {name = "Hushed", est = "1-2 a minute", rate = 1.5, mult = 0.2},
+  [2] = {name = "Quiet", est = "2-3 a minute", rate = 2.5, mult = 0.35},
+  [3] = {name = "Normal", est = "3-4 a minute", rate = 3.5, mult = 0.75},
+  [4] = {name = "Lively", est = "4-5 a minute", rate = 4.5, mult = 1.05},
+  [5] = {name = "Chatterbox", est = "5-6 a minute", rate = 5.5, mult = 1.4},
 }
-local HARD_GAP = 5          -- seconds between any two of your lines, always
+-- Speech budget: it refills steadily at the level's rate, a line costs one, and it holds at most two, so there can
+-- be a small burst at the pull and then a natural recovery. Big moments are always allowed (they still spend it).
+local SAFE_GAP = 2          -- seconds between any two of your lines, always (keeps chat from throttling)
+local BUDGET_CAP = 2.0
+local budget, budgetT = 1.0, 0
 local spokeTimes = {}
 local lastSpoke = -1000
+local SILENCE_FULL = 30     -- seconds of quiet in a fight after which the chance has risen to its top
+local REFRACTORY = 10       -- seconds over which the chance recovers after a line
 ns.CHATTY = CHATTY
 function ns.chattyItems()
   local t = {}
@@ -679,21 +687,20 @@ end
 
 function ns.sinceSpoke() return now() - lastSpoke end
 
-local function linesInLastMinute(t)
-  local n = 0
-  for i = #spokeTimes, 1, -1 do
-    if t - spokeTimes[i] < 60 then n = n + 1 else break end
-  end
-  return n
+local function refillBudget(t)
+  local ch = CHATTY[ns.chattyNow()] or CHATTY[3]
+  if budgetT == 0 then budgetT = t end
+  budget = math.min(BUDGET_CAP, budget + (t - budgetT) * ch.rate / 60)
+  budgetT = t
 end
+ns.getBudget = function() refillBudget(now()) return budget end
 
 -- may a normal line go out now? (nil = yes, otherwise why not)
 local function paceBlock(t, big)
-  if t - lastSpoke < HARD_GAP then return "pace: " .. HARD_GAP .. "s between lines" end
+  if t - lastSpoke < SAFE_GAP then return "pace: " .. SAFE_GAP .. "s between lines" end
   if big then return nil end
-  local ch = CHATTY[ns.chattyNow()] or CHATTY[3]
-  if t - lastSpoke < ch.gap then return "pace: quiet gap" end
-  if linesInLastMinute(t) >= ch.perMin then return "pace: " .. ch.perMin .. " lines a minute" end
+  refillBudget(t)
+  if budget < 1 then return "pace: speech budget is spent" end
   if ns.G and ns.G.paceBlock then
     local why = ns.G.paceBlock(t)
     if why then return why end
@@ -715,6 +722,8 @@ local function deliver(c, ctx, moment, extra, opt)
   local ok = send(channel, text)
   if not ok then return false end
   local t = now()
+  refillBudget(t)
+  budget = math.max(0, budget - 1)
   lastSpoke = t
   spokeTimes[#spokeTimes + 1] = t
   while #spokeTimes > 30 do table.remove(spokeTimes, 1) end
@@ -957,7 +966,13 @@ local function chanceOK(moment, big)
   if big then return true end
   local base = FREQ[moment] or 25
   local mult = (CHATTY[ns.chattyNow()] or CHATTY[3]).mult
-  return math.random() * 100 < base * mult
+  local t = now()
+  local since = t - lastSpoke
+  if ns.G and ns.G.sinceAny then since = math.min(since, ns.G.sinceAny(t)) end
+  -- right after a line the next one is less likely; in a fight, a long quiet stretch makes one likelier
+  local refr = 0.2 + 0.8 * math.min(1, (t - lastSpoke) / REFRACTORY)
+  local boost = ns.inCombat and (1 + math.min(since, SILENCE_FULL) / 20) or 1
+  return math.random() * 100 < base * mult * refr * boost
 end
 
 local function quiet(ctx, moment, why)
@@ -1253,6 +1268,9 @@ ev:SetScript("OnEvent", function(_, event, a1, ...)
     if a1 == "player" then pcall(scanDebuffs, true) end
   elseif event == "PLAYER_REGEN_DISABLED" then
     ns.inCombat = true
+    refillBudget(now())
+    budget = math.min(budget, 1.0)    -- a short pull starts with at most one line to spend
+    if ns.G and ns.G.fightStart then ns.G.fightStart() end
     if ns.Log then ns.Log.fightStart() end
   elseif event == "PLAYER_REGEN_ENABLED" then
     ns.inCombat = false
@@ -1318,6 +1336,7 @@ end
 -- test helpers for the harness
 ns._test = {markTrue = markTrue, resolveArch = resolveArch, render = render, pick = pick, itemMoment = itemMoment,
   setPending = function(k) killPending = k end, debuffQueue = debuffQueue, readSpec = readSpec,
-  resetPace = function() lastSpoke = -1000 for i = #spokeTimes, 1, -1 do spokeTimes[i] = nil end end,
+  setBudget = function(v) budget, budgetT = v, now() end,
+  resetPace = function() lastSpoke = -1000 budget, budgetT = 1.0, 0 for i = #spokeTimes, 1, -1 do spokeTimes[i] = nil end end,
   setFightOpened = function(v) fightOpened = v end, refreshMap = refreshMap, slotSpell = slotSpell, before = before,
   setHurt = function() hurtAt = now() end}

@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.31 · 2026-11-15
+- Speech budget pacing, five new spreads, loudest-member party budget
+
 ## 0.57-alpha2.30 · 2026-11-15
 - Profession lines switch in Options
 

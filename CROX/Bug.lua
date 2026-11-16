@@ -433,9 +433,9 @@ function Bug.test()
   if cdb.on == false then p("  It's switched off. Type /x on.") end
   if ns.hookOK and not ns.hookOK() then p("  This client won't let me see your button presses (the hook failed). That would be a bug - /x bug.") end
   if not ns.inCombat then p("  You're not in combat; most lines only happen in a fight.") end
-  local ch = ns.CHATTY and ns.CHATTY[cdb.chatty or 2]
+  local ch = ns.CHATTY and ns.CHATTY[(ns.chattyNow and ns.chattyNow()) or cdb.chatty or 3]
   if ch then
-    p(("  Chatty %s: at least %ds between lines, at most %d a minute."):format(tostring(cdb.chatty or 2), ch.gap, ch.perMin))
+    p(("  Pace %s: about %s. A line needs a speech budget of 1 (now %.1f), and at least 2 seconds apart."):format(ch.name, ch.est, ns.getBudget and ns.getBudget() or 0))
   end
   if ns.sinceSpoke then
     local s = ns.sinceSpoke()

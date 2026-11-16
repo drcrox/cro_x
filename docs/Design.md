@@ -228,3 +228,11 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 - Setup holds: Who are you? (five dropdowns with descriptors, example line), How do you speak? (How chatty, In a raid, Ask for help, Answer a call, Troll voice for trolls, switches for Emotes, Allow /yell, Call and response, Take turns, Profanity filter, Window sounds), Read from the game (professions, spec lines unlocked), Done and Choose lines.
 - Options now keeps only: master on/off, Profession lines switch (cdb.profLines; gates profession tag lines, item-moment profession lines and gather/craft emotes), Media references placeholder, Log, Beta testing, and Window (text scale, minimap, resets).
 - Closing the window on the first run still finishes setup and offers the next step. Default window is 780x720.
+
+### Speech budget pacing (0.57-alpha2.31)
+- The five paces now mean 1-2, 2-3, 3-4, 4-5 and 5-6 lines a minute. Each has a rate (the middle of the spread) and a chance multiplier (Core.lua `CHATTY`).
+- The one-minute window and the fixed gaps are gone. A **speech budget** refills at the pace's rate, holds at most 2, and a line costs 1. A short pull starts with at most 1. Big moments always go (they still spend it).
+- Floor between your own lines is 2 seconds (chat throttle safety). After a line the chance recovers smoothly over 10 seconds; in a fight, a long quiet stretch raises it (up to x2.5 at 30 seconds).
+- Party: the group shares one budget (cap 2.5) refilled at the **loudest member's** rate, so quiet characters are not starved by a chatty one. Levels ride along on the HI and SP messages (a trailing field; older builds ignore it). Hold after anyone speaks is 3 seconds; one voice cannot take two turns in 15 seconds.
+- Simulations behind this are in tools/sim (party2: party caps, party3: budget vs window, party4: floor and refractory variants). The sim measures spacing only; how it feels in a fight is for alpha play and /x flag to decide. Multipliers are first guesses, to be retuned from logs.
+- Parked next: situation boosts (pull, kill, low health, first big cooldown) as a one-number-per-moment table, once testers say what should always or never speak.

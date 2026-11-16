@@ -17,8 +17,8 @@ local pendingReply           -- {kind, caller, t, dtype}
 local pendingThanks          -- {helper, t}
 local lastCall = {}          -- [kind] = time
 local REPLY_WINDOW = 6
-local PARTY_HOLD = 5
-local PARTY_CAP = {[1] = 2, [2] = 3, [3] = 5, [4] = 6, [5] = 8}
+local PARTY_HOLD = 3           -- seconds after anyone in the party speaks before the next voice
+local PARTY_BUDGET_CAP = 2.5   -- the party shares a speech budget, set by its loudest member
 
 -- Multi-speaker groundwork (see docs/Raid and Multi-Speaker (proposal).md).
 -- A moment that several characters can answer is an "exchange": an id, the moment, who started it, and a list
@@ -182,18 +182,37 @@ end
 ------------------------------------------------------------------------
 -- Party pacing
 ------------------------------------------------------------------------
+local pBudget, pBudgetT = 1.0, 0
+-- the loudest pace level in the group (levels ride along on HI and SP messages)
+local function loudest()
+  local lv = ns.chattyNow()
+  for _, name in ipairs(others()) do
+    local m = members[name]
+    if m and m.level and m.level > lv then lv = m.level end
+  end
+  return lv
+end
+local function refillParty(t)
+  local ch = ns.CHATTY[loudest()] or ns.CHATTY[3]
+  if pBudgetT == 0 then pBudgetT = t end
+  pBudget = math.min(PARTY_BUDGET_CAP, pBudget + (t - pBudgetT) * ch.rate / 60)
+  pBudgetT = t
+end
+function G.fightStart() pBudget, pBudgetT = math.min(pBudget, 1.0), 0 end
+function G.sinceAny(t) return t - lastPartySpoke end
 function G.paceBlock(t)
   local cdb = ns.cdb
   if not cdb.turns or not grouped() or #others() == 0 then return nil end
   if t - lastPartySpoke < PARTY_HOLD then return "party: holding after someone spoke" end
-  local n = 0
-  for i = #partyTimes, 1, -1 do if t - partyTimes[i] < 60 then n = n + 1 else break end end
-  if n >= (PARTY_CAP[ns.chattyNow()] or 5) then return "party: pace for the whole party" end
-  if lastPartySpeaker == me() and t - lastPartySpoke < 20 then return "party: letting someone else talk" end
+  refillParty(t)
+  if pBudget < 1 then return "party: pace for the whole party" end
+  if lastPartySpeaker == me() and t - lastPartySpoke < 15 then return "party: letting someone else talk" end
 end
 
 local function notePartyLine(who)
   local t = now()
+  refillParty(t)
+  pBudget = math.max(0, pBudget - 1)
   lastPartySpoke, lastPartySpeaker = t, who
   partyTimes[#partyTimes + 1] = t
   while #partyTimes > 20 do table.remove(partyTimes, 1) end
@@ -203,7 +222,7 @@ end
 function G.noteSpoke(kind)
   if kind == "call" then return end          -- a call counts only once answered (the reply counts the pair)
   notePartyLine(me())
-  send("SP", kind == "reply" and 1 or 0)
+  send("SP", kind == "reply" and 1 or 0, ns.chattyNow())
 end
 
 ------------------------------------------------------------------------
@@ -392,10 +411,12 @@ local function onAddon(prefix, msg, ch, sender)
   if kind == "HI" then
     local isNew = not m.ver
     m.ver, m.class, m.proto = parts[4], parts[5], tonumber(parts[6])
-    if isNew then send("HI", ns.VERSION, ns.profile.class or "", G.PROTO) end
+    m.level = tonumber(parts[7]) or m.level
+    if isNew then send("HI", ns.VERSION, ns.profile.class or "", G.PROTO, ns.chattyNow()) end
   elseif kind == "ST" then
     m.flags, m.flagsT = parts[4] or "", t
   elseif kind == "SP" then
+    m.level = tonumber(parts[5]) or m.level
     notePartyLine(from)
   elseif kind == "CALL" then
     local xid = (parts[7] and parts[7] ~= "") and parts[7] or (from .. "-" .. math.floor(t))
@@ -443,7 +464,7 @@ ev:SetScript("OnEvent", function(_, event, ...)
     lastFlags = nil
     return
   end
-  if grouped() then send("HI", ns.VERSION, ns.profile.class or "", G.PROTO) end
+  if grouped() then send("HI", ns.VERSION, ns.profile.class or "", G.PROTO, ns.chattyNow()) end
 end)
 
 G._test = {answerers = answerers, exchanges = exchanges, onAddon = onAddon, members = members, setPending = function(v) pendingReply = v end,

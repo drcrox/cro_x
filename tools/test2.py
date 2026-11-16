@@ -281,7 +281,7 @@ r = lua.eval('''function(ns)
   local items = ns.chattyItems()
   out.item1, out.item3, out.item5 = items[1][2], items[3][2], items[5][2]
   local ps = {}
-  for i = 1, 5 do ps[i] = ns.CHATTY[i].perMin end
+  for i = 1, 5 do ps[i] = ns.CHATTY[i].rate end
   out.perMin = table.concat(ps, ",")
   -- the three-level numbers move up by one, Normal staying Normal
   local savedDB = CROX2CharDB
@@ -305,8 +305,8 @@ r = lua.eval('''function(ns)
   out.always, out.rarely = always, hits / 2000
   ns.cdb.crAsk = 4
   return out end''')(ns)
-check("five paces with estimates", r["levels"] == 5 and "Hushed" in r["item1"] and "under 1" in r["item1"] and "2-4" in r["item3"] and "Chatterbox" in r["item5"], (r["item1"], r["item3"], r["item5"]))
-check("pace limits rise with each level", r["perMin"] == "1,2,4,6,9", r["perMin"])
+check("five paces with estimates", r["levels"] == 5 and "Hushed" in r["item1"] and "1-2 a minute" in r["item1"] and "3-4 a minute" in r["item3"] and "Chatterbox" in r["item5"], (r["item1"], r["item3"], r["item5"]))
+check("pace rates rise with each level", r["perMin"] == "1.5,2.5,3.5,4.5,5.5", r["perMin"])
 check("old three-level pace moves up one (Normal stays Normal)", r["migrated"] == "3,2,2" and r["migratedLively"] == 4, (r["migrated"], r["migratedLively"]))
 check("new characters start at Normal, raids Quiet, call dials Always", r["fresh"] == "3,2,4,4", r["fresh"])
 check("call dials: Always never skips, Rarely about a quarter", r["always"] and 0.18 < r["rarely"] < 0.32, r["rarely"])
@@ -459,3 +459,22 @@ end''')(ns)
 check("professions come from the modern list only", r["profs"] == "blacksmithing,cooking,first_aid,fishing,mining", r["profs"])
 check("spec read from the one shared tree by column and row (Arms row 3, Protection row 2, no Fury)", r["spec"] == "Arms2,Fury0,Protection1", r["spec"])
 check("probe lists the talent trees", "tree 1117:" in r["text"] and "traits config 99" in r["text"])
+
+# --- speech budget pacing (0.57-alpha2.31)
+r = lua.eval('''function(ns)
+  local T = ns._test
+  local out = {}
+  ns.cdb.chatty = 3 ns.cdb.turns = false
+  T.resetPace()
+  out.first = ns.paceBlock(1000, false)        -- budget starts at 1
+  T.setBudget(0.4)
+  out.spent = ns.paceBlock(1000, false)
+  out.big = ns.paceBlock(1000, true)           -- big moments ignore the budget
+  T.setBudget(0)
+  local b0 = ns.getBudget()
+  out.refilled = ns.getBudget() >= b0
+  ns.cdb.turns = true
+  return out
+end''')(ns)
+check("budget: a fresh character may speak once", r["first"] is None, r["first"])
+check("budget: spent budget holds lines back, big moments still go", r["spent"] == "pace: speech budget is spent" and r["big"] is None, (r["spent"], r["big"]))

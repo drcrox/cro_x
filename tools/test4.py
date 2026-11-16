@@ -80,7 +80,7 @@ sent0 = len(list(H.sent.values()))
 slash("test")
 out = chat()[n0:]
 check("/x test prints plain reasons", any("dice said" in l or "too soon" in l or "spoken" in l for l in out), out[:6])
-check("/x test mentions the Chatty limits", any("Chatty" in l for l in out))
+check("/x test mentions the pace and budget", any("Pace" in l and "budget" in l for l in out))
 check("/x test mentions errors", any("errors this session" in l for l in out))
 check("/x test prints only to your own chat", len(list(H.sent.values())) == sent0)
 slash("help")
