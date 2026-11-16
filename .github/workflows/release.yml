@@ -1,7 +1,8 @@
 name: Release
 
 # Every push to main: read the version from CROX.toc. If there is no release for it yet,
-# zip the CROX folder and publish a pre-release named <version> with the zip attached.
+# zip the CROX folder and publish a pre-release with the zip attached. Names look like the early releases did:
+# tag v<version>, title "cro/x v<version>", file cro_x_v<version>.zip (for example v0.62-beta).
 on:
   push:
     branches: [main]
@@ -25,10 +26,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+          # looks for the tag with and without the v, so versions released before the v naming are not released twice
+          v="${{ steps.ver.outputs.version }}"
+          if gh release view "v${v}" >/dev/null 2>&1 || gh release view "${v}" >/dev/null 2>&1; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build the zip
         if: steps.exists.outputs.found == 'false'
-        run: zip -r "cro_x_${{ steps.ver.outputs.version }}.zip" CROX
+        run: zip -r "cro_x_v${{ steps.ver.outputs.version }}.zip" CROX
       - name: Publish the release
         if: steps.exists.outputs.found == 'false'
         env:
@@ -36,11 +39,11 @@ jobs:
         run: |
           v="${{ steps.ver.outputs.version }}"
           {
-            echo "## cro_x ${v}"
+            echo "## cro/x v${v}"
             echo
             awk -v h="## ${v}" '$0==h{f=1;next} /^## /{f=0} f' CHANGELOG.md
             echo "Install: close the game, delete the old Interface/AddOns/CROX folder, unzip so the path is Interface/AddOns/CROX/CROX.toc. The login line in game should say cro_x ${v}."
             echo
             echo "Report problems in game with /x bug. Tester checklist: docs/beta/Tester checklist.md"
           } > notes.md
-          gh release create "${v}" "cro_x_${v}.zip" --title "cro_x ${v}" --prerelease --notes-file notes.md
+          gh release create "v${v}" "cro_x_v${v}.zip" --title "cro/x v${v}" --prerelease --notes-file notes.md

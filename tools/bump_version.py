@@ -11,7 +11,7 @@ Two kinds of build:
       python3 tools/bump_version.py release 0.58 "What changed" ["Another line" ...]
     Sets the label to 0.58-alpha2 (the stage carries over; to change it use STAGE=beta in the environment),
     and updates CROX/CROX.toc, the README, CHANGELOG.md and the tester checklist. Then merge dev into main and
-    push; the release workflow publishes 0.58-alpha2 from CROX.toc (see .github/workflows/release.yml).
+    push; the release workflow publishes v0.58-alpha2 (tag v0.58-alpha2, title "cro/x v0.58-alpha2") from CROX.toc (see .github/workflows/release.yml).
 """
 import datetime
 import os
