@@ -80,7 +80,7 @@ function hooksecurefunc(name, fn) H.hooks[name] = fn end
 function UseAction(slot) local h = H.hooks.UseAction if h then h(slot) end end
 function SendChatMessage(text, ch) table.insert(H.sent, {t = H.clock, ch = ch, text = text}) end
 C_ChatInfo = {RegisterAddonMessagePrefix = function() return true end,
-  SendAddonMessage = function(prefix, msg, ch) table.insert(H.addon, {prefix = prefix, msg = msg, ch = ch}) end}
+  SendAddonMessage = function(prefix, msg, ch, target) table.insert(H.addon, {prefix = prefix, msg = msg, ch = ch, target = target}) end}
 function GetCursorPosition() return 0, 0 end
 
 -- dropdown + tabs

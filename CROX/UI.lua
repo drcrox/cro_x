@@ -346,6 +346,7 @@ local function buildHome(parent)
     {"yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies. With it on, yells are still saved for big moments: low health, a boss or elite, or a long fight, with a rest between yells that is shorter at louder paces, and only one yell at a time in a party."},
     {"cr", "Call and response", "Your character calls for help and answers other cro/x users in your group."},
     {"turns", "Take turns with the party", "cro/x users in a party take turns instead of talking over each other. Turning it off only affects you."},
+    {"nearby", "Pace with nearby cro/x users", "When someone near you speaks, cro/x sends them one silent addon message. If they run cro/x too, you share when you speak and yell, so you take turns even outside a group. People without cro/x see nothing. Nothing personal is sent."},
     {"filter", "Profanity filter", "Real-world swear words are swapped for clean versions. Your own lines are never changed."},
     {"sound", "Window sounds", "The small clicks and chimes when cro/x windows open and close."},
   }

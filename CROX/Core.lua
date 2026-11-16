@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.61"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.61-beta.3"
+local BUILD = "0.61-beta.4"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -53,7 +53,7 @@ ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
   profLines = true, testing = false, lineHide = {}, simFakes = {},
-  on = true, chatty = 3, raidChatty = 3, chattyScale = 3, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
+  on = true, chatty = 3, raidChatty = 3, chattyScale = 3, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true, nearby = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
   setupDone = false, off = {}, said = {}, last = {}, custom = {}, recipes = {}, recipeNames = {},

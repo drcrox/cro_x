@@ -1144,3 +1144,62 @@ check("Fights, Fight length and Rest between set how a run goes", r["finished"] 
 check("party damage Brutal hurts", r["brutalHurts"], r)
 check("Random everything rolls inside the limits and says what it rolled", r["rollOk"] and r["rollCustom"] and r["partyOk"] and r["rolledText"], r)
 check("the Advanced panel opens and closes", r["open"] and r["closed"], r)
+
+# --- nearby pacing: silent whispers to nearby speakers (0.61-beta.4)
+r = lua.eval('''function(ns, H)
+  local out = {}
+  local G = ns.G
+  ns.cdb.on = true ns.cdb.turns = true ns.cdb.nearby = true ns.cdb.yell = true
+  H.group = false
+  local function count(kind, to)
+    local n = 0
+    for _, m in pairs(H.addon) do
+      if m.ch == "WHISPER" and m.msg:find("|" .. kind .. "|", 1, true) and (not to or m.target == to) then n = n + 1 end
+    end
+    return n
+  end
+  for k in pairs(G._test.near) do G._test.near[k] = nil end
+  H.tick(1000)
+  -- someone nearby speaks: one silent hello
+  H.fire("CHAT_MSG_SAY", "Lok'tar", "Stranger-Realm")
+  out.hello = count("HI", "Stranger-Realm")
+  H.tick(5)
+  H.fire("CHAT_MSG_SAY", "Again", "Stranger-Realm")
+  out.noRepeat = count("HI", "Stranger-Realm") == 1                  -- not again for a long while
+  H.fire("CHAT_MSG_SAY", "Mine", ns.profile.name or "Me")
+  out.notMe = count("HI") == 1
+  -- they answer: now a nearby peer, and I answer once
+  G._test.onAddon("CROX", "V2|HI|0|0.61|SHAMAN|1|6", "WHISPER", "Stranger-Realm")
+  out.peer = #G._test.nearPeers() == 1 and G._test.nearPeers()[1] == "Stranger"
+  out.answered = count("HI", "Stranger-Realm") == 2
+  G._test.onAddon("CROX", "V2|HI|0|0.61|SHAMAN|1|6", "WHISPER", "Stranger-Realm")
+  out.noPingPong = count("HI", "Stranger-Realm") == 2
+  -- their lines hold mine, their yell holds mine
+  G._test.onAddon("CROX", "V2|SP|0|0|6|Y", "WHISPER", "Stranger-Realm")
+  out.holds = ns.G.paceBlock(ns.now()) == "party: holding after someone spoke"
+  out.yellHeld = ns.G.yellBlock(ns.now()) == true
+  -- my own line goes to them
+  H.tick(30)
+  local before = count("SP", "Stranger")
+  ns.G.noteSpoke("said", false)
+  out.mineGoes = count("SP") >= 1
+  -- the switch turns it all off
+  ns.cdb.nearby = false
+  out.offNoPeers = #G._test.nearPeers() == 0 and ns.G.hasVoices() == false
+  H.tick(1000)
+  local c0 = count("HI")
+  H.fire("CHAT_MSG_SAY", "Hello", "Another-Realm")
+  out.offNoHello = count("HI") == c0
+  ns.cdb.nearby = true
+  -- a stranger stays a peer only a few minutes
+  H.tick(400)
+  out.expires = #G._test.nearPeers() == 0
+  for k in pairs(G._test.near) do G._test.near[k] = nil end
+  return out
+end''')(ns, H)
+r = dict(r)
+check("a nearby speaker gets one silent hello, not repeats, never me", r["hello"] == 1 and r["noRepeat"] and r["notMe"], r)
+check("a nearby cro/x user who answers becomes a peer, answered once", r["peer"] and r["answered"] and r["noPingPong"], r)
+check("a nearby peer's lines and yells hold mine, as a party's do", r["holds"] and r["yellHeld"], r)
+check("my lines are whispered to nearby peers", r["mineGoes"], r)
+check("the nearby switch turns it off, and peers expire", r["offNoPeers"] and r["offNoHello"] and r["expires"], r)

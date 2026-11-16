@@ -134,6 +134,61 @@ end
 G.others = others
 
 ------------------------------------------------------------------------
+-- Nearby cro/x users outside my group. When someone near me speaks, I send them one silent addon whisper (a hello). A player
+-- who runs cro/x answers, and from then on we swap the same "I just spoke" notices a party does, so we pace, take turns and
+-- keep yells apart without being grouped. Players without cro/x never see anything: an addon whisper nobody listens for is
+-- dropped by the game. Calls for help and replies stay a party thing. The "nearby" switch turns all of this off.
+------------------------------------------------------------------------
+local near = {}              -- [name] = {seen, level}: cro/x users who answered, near me and not in my group
+G.near = near
+local probed = {}            -- [name] = when I last sent them a hello
+local lastProbe = -1000
+local NEAR_FRESH = 180       -- a nearby cro/x user counts for this many seconds after I last heard from them
+local PROBE_NEW, PROBE_KNOWN = 900, 60
+
+local function nearOn() return ns.cdb ~= nil and ns.cdb.on and ns.cdb.nearby ~= false and not ns.simParty end
+local function nearPeers()
+  local out = {}
+  if not nearOn() then return out end
+  local t = now()
+  for name, m in pairs(near) do
+    if t - (m.seen or 0) < NEAR_FRESH and not unitFor(name) then out[#out + 1] = name end
+  end
+  table.sort(out)
+  return out
+end
+G.nearPeers = nearPeers
+local function whisper(to, msg)
+  local f = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
+  if f then pcall(f, PREFIX, msg, "WHISPER", to) end
+end
+local function sendNear(kind, ...)
+  local peers = nearPeers()
+  if #peers == 0 then return end
+  local parts = {"V2", kind, "0"}
+  for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
+  local msg = table.concat(parts, "|")
+  for i = 1, math.min(#peers, 8) do whisper(peers[i], msg) end
+end
+local function helloMsg() return table.concat({"V2", "HI", "0", ns.VERSION, ns.profile.class or "", G.PROTO, ns.chattyNow()}, "|") end
+-- someone near me spoke (say, yell or emote): say hello once in a while
+local function probe(sender)
+  if not nearOn() or secret(sender) or type(sender) ~= "string" then return end
+  local who = short(sender)
+  if not who or who == me() then return end
+  if unitFor(who) then return end                       -- in my group: the party channel already covers them
+  local t = now()
+  local gap = near[who] and PROBE_KNOWN or PROBE_NEW
+  if probed[who] and t - probed[who] < gap then return end
+  if t - lastProbe < 3 then return end                  -- never a burst of hellos
+  local n = 0 for _ in pairs(probed) do n = n + 1 end
+  if n > 200 then probed = {} end
+  probed[who], lastProbe = t, t
+  whisper(sender, helloMsg())
+end
+G.probe = probe
+
+------------------------------------------------------------------------
 -- What help I can give right now
 ------------------------------------------------------------------------
 local CURE = {
@@ -201,6 +256,10 @@ local function loudest()
     local m = members[name]
     if m and m.level and m.level > lv then lv = m.level end
   end
+  for _, name in ipairs(nearPeers()) do
+    local m = near[name]
+    if m and m.level and m.level > lv then lv = m.level end
+  end
   return lv
 end
 local function refillParty(t)
@@ -209,11 +268,13 @@ local function refillParty(t)
   pBudget = math.min(PARTY_BUDGET_CAP, pBudget + (t - pBudgetT) * ch.rate / 60)
   pBudgetT = t
 end
+-- other voices to pace with: cro/x users in my group, or nearby ones who answered a hello
+function G.hasVoices() return (grouped() and #others() > 0) or #nearPeers() > 0 end
 function G.fightStart() pBudget, pBudgetT = math.min(pBudget, 1.0), 0 end
 function G.sinceAny(t) return t - lastPartySpoke end
 function G.paceBlock(t)
   local cdb = ns.cdb
-  if not cdb.turns or not grouped() or #others() == 0 then return nil end
+  if not cdb.turns or not G.hasVoices() then return nil end
   if t - lastPartySpoke < PARTY_HOLD then return "party: holding after someone spoke" end
   local crowded = G.chatBlock(t, 4)
   if crowded then return crowded end
@@ -239,7 +300,7 @@ end
 -- stop at 4, answers at 5; the thanks and answers to thanks that trail an exchange stop sooner, at 3, so they never pile on top of it.
 local CROWD_SECS = 10
 function G.chatBlock(t, limit)
-  if not ns.cdb.turns or not grouped() or #others() == 0 then return nil end
+  if not ns.cdb.turns or not G.hasVoices() then return nil end
   local n = 0
   for i = #lineTimes, 1, -1 do
     if t - lineTimes[i] <= CROWD_SECS then n = n + 1 else break end
@@ -255,8 +316,10 @@ function G.noteSpoke(kind, yelled)
   if yelled then
     lastPartyYell = now()
     send("SP", kind == "reply" and 1 or 0, ns.chattyNow(), "Y")
+    sendNear("SP", kind == "reply" and 1 or 0, ns.chattyNow(), "Y")
   else
     send("SP", kind == "reply" and 1 or 0, ns.chattyNow())
+    sendNear("SP", kind == "reply" and 1 or 0, ns.chattyNow())
   end
 end
 -- Calls for help: the party makes one at a time. Without this, a pull that goes wrong has everyone calling and answering
@@ -271,7 +334,7 @@ function G.callBlock(t)
 end
 -- true while someone in the party has just yelled: only one shout at a time
 function G.yellBlock(t)
-  if not grouped() or #others() == 0 then return false end
+  if not G.hasVoices() then return false end
   return t - lastPartyYell < PARTY_YELL_GAP
 end
 
@@ -468,6 +531,24 @@ local function onAddon(prefix, msg, ch, sender)
   for x in (msg .. "|"):gmatch("([^|]*)|") do parts[#parts + 1] = x end
   if parts[1] ~= "V2" then return end
   local kind, sub = parts[2], tonumber(parts[3]) or 0
+  if ch == "WHISPER" then                    -- a nearby cro/x user (not in my group): hellos and "just spoke" notices only
+    if not nearOn() or unitFor(from) then return end
+    local t = now()
+    local n = near[from]
+    local isNew = not n or t - (n.seen or 0) >= NEAR_FRESH
+    if not n then n = {} near[from] = n end
+    n.seen = t
+    if kind == "HI" then
+      n.level = tonumber(parts[7]) or n.level
+      if isNew then whisper(sender, helloMsg()) end
+    elseif kind == "SP" then
+      n.level = tonumber(parts[5]) or n.level
+      if parts[6] == "Y" then lastPartyYell = t end
+      notePartyLine(from)
+      noteLine(t)
+    end
+    return
+  end
   if safe(IsInRaid) and sub ~= mySubgroup() then return end
   local m = members[from] or {}
   members[from] = m
@@ -523,11 +604,17 @@ f:SetScript("OnUpdate", function(_, el)
 end)
 
 local ev = CreateFrame("Frame")
-for _, e in ipairs({"CHAT_MSG_ADDON", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_DISABLED"}) do
+for _, e in ipairs({"CHAT_MSG_ADDON", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_DISABLED",
+  "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_EMOTE"}) do
   pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, ...)
   if event == "CHAT_MSG_ADDON" then pcall(onAddon, ...) return end
+  if event == "CHAT_MSG_SAY" or event == "CHAT_MSG_YELL" or event == "CHAT_MSG_EMOTE" then
+    local _, sender = ...
+    pcall(probe, sender)
+    return
+  end
   if not ns.cdb or not ns.cdb.on then return end
   if event == "PLAYER_REGEN_DISABLED" then
     lastFlags = nil
@@ -568,5 +655,5 @@ function G.simFlush(forEach)
 end
 function G.simReceive(sender, msg) onAddon(PREFIX, msg, "PARTY", sender) end
 
-G._test = {answerers = answerers, exchanges = exchanges, onAddon = onAddon, members = members, setPending = function(v) pendingReply = v end,
+G._test = {probe = probe, near = near, nearPeers = nearPeers, answerers = answerers, exchanges = exchanges, onAddon = onAddon, members = members, setPending = function(v) pendingReply = v end,
   setThanks = function(v) pendingThanks = v end, myFlags = myFlags, helperFor = helperFor}
