@@ -132,6 +132,120 @@ function Bug.report(reason, note, withFight)
 end
 
 ------------------------------------------------------------------------
+-- /x probe: what this game client offers for reading professions and talents
+------------------------------------------------------------------------
+local function show(v)
+  if ns.secret(v) then return "<secret>" end
+  if v == nil then return "nil" end
+  if type(v) == "table" then
+    local n = 0
+    for _ in pairs(v) do n = n + 1 end
+    return "table(" .. n .. ")"
+  end
+  return tostring(v)
+end
+local function call(fn, ...)
+  if type(fn) ~= "function" then return "missing" end
+  local r = {pcall(fn, ...)}
+  if not r[1] then return "error" end
+  local out = {}
+  for i = 2, math.max(2, #r) do out[#out + 1] = show(r[i]) if #out >= 8 then break end end
+  return table.concat(out, ", ")
+end
+
+function Bug.probeText()
+  local L = {}
+  local function add(s) L[#L + 1] = s end
+  local gv, gb, gd, toc = "?", "?", "?", "?"
+  if GetBuildInfo then gv, gb, gd, toc = GetBuildInfo() end
+  add(("cro/x probe · %s · game %s (%s) · interface %s"):format(ns.BUILD or "?", show(gv), show(gb), show(toc)))
+  local _, cls
+  if UnitClass then local ok, a1, a2 = pcall(UnitClass, "player") if ok then cls = a2 end end
+  add("class: " .. show(cls) .. " · level: " .. call(UnitLevel, "player"))
+  add("")
+  add("PROFESSIONS")
+  add("classic skill list: GetNumSkillLines = " .. call(GetNumSkillLines))
+  if type(GetNumSkillLines) == "function" then
+    local names = {}
+    for i = 1, math.min(40, tonumber((select(2, pcall(GetNumSkillLines)))) or 0) do
+      local r = {pcall(GetSkillLineInfo, i)}
+      if r[1] and not r[3] then names[#names + 1] = show(r[2]) end
+    end
+    add("  skills (non-header): " .. table.concat(names, ", "))
+  end
+  add("modern list: GetProfessions = " .. call(GetProfessions))
+  if type(GetProfessions) == "function" then
+    local r = {pcall(GetProfessions)}
+    for i = 2, 7 do
+      if type(r[i]) == "number" then add("  index " .. r[i] .. " = " .. call(GetProfessionInfo, r[i])) end
+    end
+  end
+  local TS = C_TradeSkillUI
+  add("C_TradeSkillUI.GetAllProfessionTradeSkillLines = " .. call(TS and TS.GetAllProfessionTradeSkillLines))
+  add("cro/x read: " .. (function() local t = {} for k in pairs(ns.profile.profs or {}) do t[#t + 1] = k end table.sort(t) return #t > 0 and table.concat(t, ", ") or "nothing" end)())
+  add("")
+  add("TALENTS AND SPEC")
+  add("classic trees: GetNumTalentTabs = " .. call(GetNumTalentTabs))
+  add("  GetTalentTabInfo(1) = " .. call(GetTalentTabInfo, 1))
+  add("  GetNumTalents(1) = " .. call(GetNumTalents, 1))
+  add("  GetTalentInfo(1, 1) = " .. call(GetTalentInfo, 1, 1))
+  add("modern spec: GetSpecialization = " .. call(GetSpecialization))
+  add("  GetSpecializationInfo(1) = " .. call(GetSpecializationInfo, 1))
+  local SI = C_SpecializationInfo
+  add("  C_SpecializationInfo.GetSpecialization = " .. call(SI and SI.GetSpecialization))
+  add("  C_SpecializationInfo.GetSpecializationInfo(1) = " .. call(SI and SI.GetSpecializationInfo, 1))
+  local CT = C_ClassTalents
+  add("  C_ClassTalents.GetActiveConfigID = " .. call(CT and CT.GetActiveConfigID))
+  add("  GetNumTalentGroups = " .. call(GetNumTalentGroups))
+  add("spell tabs: GetNumSpellTabs = " .. call(GetNumSpellTabs))
+  local SB = C_SpellBook
+  add("  C_SpellBook.GetNumSpellBookSkillLines = " .. call(SB and SB.GetNumSpellBookSkillLines))
+  local n = tonumber((select(2, pcall(GetNumSpellTabs or function() return 0 end)))) or 0
+  for i = 1, math.min(n, 8) do add("  tab " .. i .. " = " .. call(GetSpellTabInfo, i)) end
+  if SB and SB.GetNumSpellBookSkillLines and SB.GetSpellBookSkillLineInfo then
+    local m = tonumber((select(2, pcall(SB.GetNumSpellBookSkillLines)))) or 0
+    for i = 1, math.min(m, 8) do
+      local r = {pcall(SB.GetSpellBookSkillLineInfo, i)}
+      add("  skill line " .. i .. " = " .. (type(r[2]) == "table" and show(r[2].name) or show(r[2])))
+    end
+  end
+  add("cro/x read: " .. (function() local t = {} for k, v in pairs(ns.profile.spec or {}) do t[#t + 1] = k .. " " .. v end table.sort(t) return #t > 0 and table.concat(t, ", ") or "nothing" end)())
+  return table.concat(L, "\n")
+end
+
+local probeFrame
+function Bug.probe()
+  if not probeFrame then
+    local f = W.panel("CROX2ProbeFrame", "cro/x - what this client offers", 600, 460)
+    probeFrame = f
+    local hint = W.hint(f, "Everything below is selected. Copy it (Ctrl+C) and paste it into the chat with Claude.")
+    hint:SetPoint("TOPLEFT", 16, -32)
+    hint:SetPoint("RIGHT", -16, 0)
+    local sf = W.make("ScrollFrame", f, {"UIPanelScrollFrameTemplate"}, "CROX2ProbeScroll")
+    sf:SetPoint("TOPLEFT", 14, -54)
+    sf:SetPoint("BOTTOMRIGHT", -32, 44)
+    local eb = CreateFrame("EditBox", nil, sf)
+    eb:SetMultiLine(true)
+    eb:SetAutoFocus(false)
+    eb:SetFontObject("ChatFontNormal")
+    eb:SetWidth(540)
+    eb:SetMaxLetters(0)
+    eb:SetScript("OnEscapePressed", function() f:Hide() end)
+    sf:SetScrollChild(eb)
+    f.eb = eb
+    local sel = W.button(f, "Select all", 110, function() eb:SetFocus() eb:HighlightText() end)
+    sel:SetPoint("BOTTOMRIGHT", -16, 12)
+    local close = W.button(f, "Close", 90, function() f:Hide() end)
+    close:SetPoint("RIGHT", sel, "LEFT", -6, 0)
+  end
+  if ns.refreshProfile then pcall(ns.refreshProfile) end
+  probeFrame:Show()
+  probeFrame.eb:SetText(Bug.probeText())
+  probeFrame.eb:SetFocus()
+  probeFrame.eb:HighlightText()
+end
+
+------------------------------------------------------------------------
 -- The window (/x bug)
 ------------------------------------------------------------------------
 local frame

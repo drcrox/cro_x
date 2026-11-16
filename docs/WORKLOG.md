@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.10 · 2026-11-15
+- Professions and spec: read through the modern profession list and trade-skill lines as well as the classic skill list; fall back to the chosen specialization when there are no classic talent trees; read again 4 and 12 seconds after login. New /x probe window shows what this client offers, to copy and paste.
+
 ## 0.57-alpha2.9 · 2026-11-15
 - Alliance screen: the Disable addon box is now a real toggle. Ticking it turns cro/x off for that character (no more screen at login); typing /x shows it ticked, and unticking turns it back on.
 

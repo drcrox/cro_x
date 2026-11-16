@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.9"
+local BUILD = "0.57-alpha2.10"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -108,14 +108,43 @@ local SPEC_ORDER = {
   DRUID = {"Balance", "Feral", "Restoration"},
 }
 
+local function addProf(out, name)
+  name = str(name)
+  if name and PROF_KEYS[name:lower()] then out[PROF_KEYS[name:lower()]] = true end
+end
+
+-- Professions, read every way the game offers: the classic skill list, the modern profession list, and the
+-- trade-skill lines. Whichever this client has fills in what it can.
 local function readProfessions()
   local out = {}
   for i = 1, (num(safe(GetNumSkillLines)) or 0) do
     local name, header = safe(GetSkillLineInfo, i)
-    name = str(name)
-    if name and not header and PROF_KEYS[name:lower()] then out[PROF_KEYS[name:lower()]] = true end
+    if not header then addProf(out, name) end
+  end
+  if GetProfessions then
+    local list = {safe(GetProfessions)}
+    for i = 1, 6 do
+      local idx = num(list[i])
+      if idx then addProf(out, (safe(GetProfessionInfo, idx))) end
+    end
+  end
+  local TS = C_TradeSkillUI
+  if TS and TS.GetAllProfessionTradeSkillLines then
+    for _, id in ipairs(safe(TS.GetAllProfessionTradeSkillLines) or {}) do
+      local info = safe(TS.GetProfessionInfoBySkillLineID, id)
+      if type(info) == "table" then addProf(out, info.parentProfessionName or info.professionName) end
+    end
   end
   return out
+end
+
+local function currentSpecName()
+  local fn = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
+  local idx = num(safe(fn))
+  if not idx then return nil end
+  local info = (C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo) or GetSpecializationInfo
+  local r = {safe(info, idx)}
+  return str(r[2])
 end
 
 -- spec bands unlocked per tree: {["Arms"] = 2, ...} (1 early, 2 middle, 3 deep)
@@ -137,6 +166,12 @@ local function readSpec()
     if tname then
       out[tname] = deepest >= 5 and 3 or deepest >= 3 and 2 or deepest >= 1 and 1 or 0
     end
+  end
+  -- no classic talent trees here: use the chosen specialization's name, counted as fully unlocked
+  if next(out) == nil then
+    local name = currentSpecName()
+    local data = CROX2_SPEC and CROX2_SPEC[profile.class or ""]
+    if name and data and data[name] then out[name] = 3 end
   end
   return out
 end
@@ -1116,7 +1151,8 @@ local ev = CreateFrame("Frame")
 for _, e in ipairs({"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_TALENT_UPDATE",
   "CHARACTER_POINTS_CHANGED", "SKILL_LINES_CHANGED", "ACTIONBAR_SLOT_CHANGED", "UPDATE_SHAPESHIFT_FORMS",
   "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "UNIT_AURA", "TRADE_SKILL_SHOW", "TRADE_SKILL_UPDATE",
-  "CRAFT_SHOW", "CRAFT_UPDATE", "UNIT_SPELLCAST_SUCCEEDED", "LOOT_OPENED"}) do
+  "CRAFT_SHOW", "CRAFT_UPDATE", "UNIT_SPELLCAST_SUCCEEDED", "LOOT_OPENED", "PLAYER_SPECIALIZATION_CHANGED",
+  "TRADE_SKILL_LIST_UPDATE"}) do
   pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, a1, ...)
@@ -1132,6 +1168,10 @@ ev:SetScript("OnEvent", function(_, event, a1, ...)
     refreshProfile()
     pcall(refreshMap)
     pcall(scanDebuffs, false)
+    -- skills and talents often aren't loaded yet at login: read again a little later
+    if C_Timer and C_Timer.After then
+      for _, secs in ipairs({4, 12}) do C_Timer.After(secs, function() refreshProfile() if ns.refreshUI then pcall(ns.refreshUI) end end) end
+    end
     if ns.isAlliance() then
       if ns.showAlliance and not cdb.alliance.disabled then pcall(ns.showAlliance) end
       return

@@ -1105,7 +1105,7 @@ end
 ------------------------------------------------------------------------
 local function help()
   p("/x - open the window · /x flag - review a fight · /x export - copy your log · /x setup - redo setup")
-  p("/x art - pick the crest art · /x splash - show the splash page · /x reset - start over")
+  p("/x art - pick the crest art · /x splash - show the splash page · /x reset - start over · /x probe - what this client offers")
   p("/x bug - report a problem · /x test - why was that press quiet?")
   p("/x on · /x off · /x help")
 end
@@ -1123,6 +1123,7 @@ SlashCmdList["CROX"] = function(msg)
   elseif msg == "art" then ns.openArtPicker()
   elseif msg == "splash" then ns.showSplash()
   elseif msg == "reset" then ns.confirmReset()
+  elseif msg == "probe" then ns.Bug.probe()
   elseif msg == "bug" or msg == "report" then ns.Bug.open()
   elseif msg == "test" then ns.Bug.test()
   elseif msg == "on" then ns.cdb.on = true p("on.")

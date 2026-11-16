@@ -304,3 +304,11 @@ end''')(ns)
 check("Alliance: ticking the box turns the addon off and closes the screen", r["off"]["disabled"] and not r["off"]["on"] and r["off"]["hidden"])
 check("Alliance: /x shows the box ticked, unticking turns it back on", r["ticked"] and not r["back"]["disabled"] and r["back"]["on"])
 H.me.faction = "Horde"; ns.refreshProfile()
+
+# --- probe
+r = lua.eval('''function(ns)
+  local t = ns.Bug.probeText()
+  ns.Bug.probe()
+  return {text = t, shown = CROX2ProbeFrame:IsShown()}
+end''')(ns)
+check("/x probe builds a report and shows it", r["shown"] and "PROFESSIONS" in r["text"] and "TALENTS AND SPEC" in r["text"] and "cro/x read:" in r["text"])
