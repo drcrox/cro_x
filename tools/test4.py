@@ -84,4 +84,4 @@ check("/x test mentions the pace and budget", any("Pace" in l and "budget" in l 
 check("/x test mentions errors", any("errors this session" in l for l in out))
 check("/x test prints only to your own chat", len(list(H.sent.values())) == sent0)
 slash("help")
-check("help lists /x bug and /x test", any(l.startswith("/x bug") for l in chat()) and any(l.startswith("/x test -") for l in chat()))
+check("help lists /x bug and /x test", any("/x bug - " in l for l in chat()) and any("/x test - " in l for l in chat()))
