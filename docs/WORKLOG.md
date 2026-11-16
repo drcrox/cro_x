@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.13 · 2026-11-15
+- spec read from the single Forever talent tree by column and row
+
 ## 0.57-alpha2.12 · 2026-11-15
 - probe lists every talent node with points: position, groups, spell
 

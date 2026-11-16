@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.12"
+local BUILD = "0.57-alpha2.13"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -140,9 +140,11 @@ local function currentSpecName()
   return str(r[2])
 end
 
--- Talent trees in the newer system (Forever): points spent per tree, turned into bands the way the classic rows
--- unlock (row 3 opens at 10 points in a tree, row 5 at 20). Returns nil when this client doesn't offer it
--- or the trees can't be named.
+-- Talent trees in the newer system (Forever): the class has ONE tree and the specs sit side by side in it, so a
+-- node's spec comes from where it sits across (posX split into thirds, in SPEC_ORDER order) and its row from
+-- posY (rows are 600 apart, the first at 2130). Bands follow the classic rule: deepest row 1-2 early, 3-4 middle,
+-- 5+ deep. Returns nil when this client doesn't offer it or nothing is spent.
+local ROW_TOP, ROW_STEP = 2130, 600
 local function readSpecTraits()
   local CT, TR = C_ClassTalents, C_Traits
   if not (CT and TR and TR.GetConfigInfo and TR.GetTreeNodes and TR.GetNodeInfo) then return nil end
@@ -152,31 +154,40 @@ local function readSpecTraits()
   if type(cfg) ~= "table" or type(cfg.treeIDs) ~= "table" then return nil end
   local class = profile.class or ""
   local order, data = SPEC_ORDER[class] or {}, CROX2_SPEC and CROX2_SPEC[class]
-  if not data then return nil end
-  local spent = {}
-  for ti, tid in ipairs(cfg.treeIDs) do
+  if not data or #order == 0 then return nil end
+  local deepest, any = {}, false
+  for _, tid in ipairs(cfg.treeIDs) do
+    local infos, minX, maxX = {}, nil, nil
     for _, nid in ipairs(safe(TR.GetTreeNodes, tid) or {}) do
       local info = safe(TR.GetNodeInfo, cid, nid)
       if type(info) == "table" then
-        local rank = num(info.currentRank) or 0
-        if rank > 0 then
-          local name
-          if info.subTreeID and TR.GetSubTreeInfo then
-            local st = safe(TR.GetSubTreeInfo, cid, info.subTreeID)
-            name = type(st) == "table" and str(st.name)
+        infos[#infos + 1] = info
+        local x = num(info.posX)
+        if x then minX = math.min(minX or x, x) maxX = math.max(maxX or x, x) end
+      end
+    end
+    if minX and maxX and maxX > minX then
+      local width = (maxX - minX + 1) / #order
+      for _, info in ipairs(infos) do
+        if (num(info.currentRank) or 0) > 0 and num(info.posX) then
+          local idx = math.min(#order, math.floor((info.posX - minX) / width) + 1)
+          local row = math.max(1, math.floor(((num(info.posY) or ROW_TOP) - ROW_TOP) / ROW_STEP + 0.5) + 1)
+          local name = order[idx]
+          if data[name] then
+            any = true
+            deepest[name] = math.max(deepest[name] or 0, row)
           end
-          if not (name and data[name]) then name = (#cfg.treeIDs == #order) and order[ti] or nil end
-          if name and data[name] then spent[name] = (spent[name] or 0) + rank end
         end
       end
     end
   end
+  if not any then return nil end
   local out = {}
   for name in pairs(data) do
-    local pts = spent[name] or 0
-    out[name] = pts >= 20 and 3 or pts >= 10 and 2 or pts >= 1 and 1 or 0
+    local d = deepest[name] or 0
+    out[name] = d >= 5 and 3 or d >= 3 and 2 or d >= 1 and 1 or 0
   end
-  return next(spent) and out or nil
+  return out
 end
 
 -- spec bands unlocked per tree: {["Arms"] = 2, ...} (1 early, 2 middle, 3 deep)

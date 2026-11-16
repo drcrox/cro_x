@@ -325,12 +325,17 @@ r = lua.eval('''function(ns)
   local saveTabs = GetNumTalentTabs
   GetNumTalentTabs = nil
   C_ClassTalents = {GetActiveConfigID = function() return 99 end}
-  local nodes = {[1] = {10, 11}, [2] = {20, 21, 22}, [3] = {30}}
-  local ranks = {[10] = 5, [11] = 6, [20] = 4, [21] = 3, [22] = 3, [30] = 0}
+  -- the real Forever layout from a probe: one tree, specs side by side (Arms left, Fury middle, Protection right)
+  local nodes = {[1117] = {1, 2, 3, 4, 5, 6, 7, 8, 9}}
+  local N = {
+    [1] = {x = 1620, y = 3330, r = 1}, [2] = {x = 1620, y = 2730, r = 3}, [3] = {x = 1020, y = 2730, r = 2},
+    [4] = {x = 1620, y = 2130, r = 5}, [5] = {x = 10280, y = 2730, r = 3}, [6] = {x = 9080, y = 2130, r = 2},
+    [7] = {x = 9680, y = 2130, r = 5}, [8] = {x = 5000, y = 4530, r = 0}, [9] = {x = 10880, y = 4530, r = 0},
+  }
   C_Traits = {
-    GetConfigInfo = function(c) return {name = "x", treeIDs = {1, 2, 3}} end,
+    GetConfigInfo = function(c) return {name = "x", treeIDs = {1117}} end,
     GetTreeNodes = function(t) return nodes[t] end,
-    GetNodeInfo = function(c, n) return {currentRank = ranks[n], posY = 100, posX = 1, maxRanks = 5} end,
+    GetNodeInfo = function(c, n) local d = N[n]; return {currentRank = d.r, posY = d.y, posX = d.x, maxRanks = 5} end,
   }
   ns.refreshProfile()
   local profs, spec = {}, {}
@@ -344,5 +349,5 @@ r = lua.eval('''function(ns)
   return {profs = table.concat(profs, ","), spec = table.concat(spec, ","), text = text}
 end''')(ns)
 check("professions come from the modern list only", r["profs"] == "blacksmithing,cooking,first_aid,fishing,mining", r["profs"])
-check("spec read from the new talent trees (11 and 10 points, none in the third)", r["spec"] == "Arms2,Fury2,Protection0" or r["spec"] == "Arms2,Fury2,Protection0", r["spec"])
-check("probe lists the talent trees", "tree 1:" in r["text"] and "traits config 99" in r["text"])
+check("spec read from the one shared tree by column and row (Arms row 3, Protection row 2, no Fury)", r["spec"] == "Arms2,Fury0,Protection1", r["spec"])
+check("probe lists the talent trees", "tree 1117:" in r["text"] and "traits config 99" in r["text"])
