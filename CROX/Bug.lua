@@ -232,6 +232,47 @@ function Bug.probeText()
             show(sample.maxRanks), show(sample.subTreeID), show(sample.groupIDs)))
         end
         add("    GetTreeInfo = " .. call(TR.GetTreeInfo, cid, tid))
+        local okt, ti2 = pcall(TR.GetTreeInfo, cid, tid)
+        if okt and type(ti2) == "table" then
+          local kv = {}
+          for k, v in pairs(ti2) do kv[#kv + 1] = tostring(k) .. "=" .. (type(v) == "table" and "table" or show(v)) end
+          table.sort(kv)
+          add("    tree fields: " .. table.concat(kv, ", "))
+        end
+        -- every node with points: where it sits and what it is
+        local minX, maxX
+        local rows = {}
+        for _, nid in ipairs(nodes) do
+          local oki, info = pcall(TR.GetNodeInfo, cid, nid)
+          if oki and type(info) == "table" then
+            local x = tonumber(info.posX)
+            if x then minX = math.min(minX or x, x) maxX = math.max(maxX or x, x) end
+            if (tonumber(info.currentRank) or 0) > 0 then
+              local spell = "?"
+              local ae = info.activeEntry
+              local eid = type(ae) == "table" and ae.entryID or (info.entryIDs and info.entryIDs[1])
+              if eid and TR.GetEntryInfo then
+                local oke, ent = pcall(TR.GetEntryInfo, cid, eid)
+                if oke and type(ent) == "table" and ent.definitionID and TR.GetDefinitionInfo then
+                  local okd, def = pcall(TR.GetDefinitionInfo, ent.definitionID)
+                  if okd and type(def) == "table" and def.spellID then
+                    local oks, sp = pcall(function()
+                      if C_Spell and C_Spell.GetSpellInfo then return C_Spell.GetSpellInfo(def.spellID) end
+                      return GetSpellInfo and { name = (GetSpellInfo(def.spellID)) } or nil
+                    end)
+                    spell = oks and type(sp) == "table" and show(sp.name) or tostring(def.spellID)
+                  end
+                end
+              end
+              local g = {}
+              for _, gid in ipairs(type(info.groupIDs) == "table" and info.groupIDs or {}) do g[#g + 1] = tostring(gid) end
+              rows[#rows + 1] = ("    node %s x%s y%s rank %s/%s groups [%s] %s"):format(show(nid), show(info.posX), show(info.posY),
+                show(info.currentRank), show(info.maxRanks), table.concat(g, ","), spell)
+            end
+          end
+        end
+        add("    posX of all nodes " .. show(minX) .. ".." .. show(maxX))
+        for _, r in ipairs(rows) do add(r) end
         if sl[1] and TR.GetSubTreeInfo then
           local oks, st = pcall(TR.GetSubTreeInfo, cid, tonumber(sl[1]))
           add("    GetSubTreeInfo(" .. sl[1] .. ") name = " .. (oks and type(st) == "table" and show(st.name) or "missing"))
