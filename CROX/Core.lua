@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.65"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.65-beta.4"
+local BUILD = "0.65-beta.5"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -255,7 +255,9 @@ ns.refreshProfile = refreshProfile
 -- right at login, so this is tried again as the world loads and a few seconds later; closing the screen keeps it closed.
 local allianceShown = false
 local allianceTold = false
-function ns.autoShowAlliance()
+-- fromTimer: the delayed tries. Only they count as "it opened" (a screen shown during the first moments of login can be wiped
+-- by the game as the world loads), and a delayed try that finds it already showing is done.
+function ns.autoShowAlliance(fromTimer)
   if allianceShown or not cdb or not cdb.alliance then return end
   if not profile.faction then refreshProfile() end
   if not ns.isAlliance() then return end
@@ -267,9 +269,14 @@ function ns.autoShowAlliance()
     return
   end
   if not ns.showAlliance then return end
+  local shownNow = _G.CROX2AllianceFrame and _G.CROX2AllianceFrame.IsShown and _G.CROX2AllianceFrame:IsShown()
+  if shownNow then
+    if fromTimer then allianceShown = true end
+    return
+  end
   local ok, err = pcall(ns.showAlliance)
   if ok then
-    allianceShown = true
+    if fromTimer then allianceShown = true end
     if C_Timer and C_Timer.After then
       C_Timer.After(2, function()
         local f = _G.CROX2AllianceFrame
@@ -1390,7 +1397,7 @@ ev:SetScript("OnEvent", function(_, event, a1, ...)
     -- skills and talents often aren't loaded yet at login: read again a little later
     if C_Timer and C_Timer.After then
       for _, secs in ipairs({4, 12}) do C_Timer.After(secs, function() refreshProfile() if ns.refreshUI then pcall(ns.refreshUI) end end) end
-      for _, secs in ipairs({1.5, 5, 13}) do C_Timer.After(secs, function() pcall(ns.autoShowAlliance) end) end
+      for _, secs in ipairs({1.5, 5, 13}) do C_Timer.After(secs, function() pcall(ns.autoShowAlliance, true) end) end
     end
     if ns.isAlliance() then
       p(("cro_x %s loaded (Alliance character). If the LOK'TAR OGAR screen does not open, type /x."):format(BUILD))

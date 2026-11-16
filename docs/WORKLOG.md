@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.65-beta.5 · 2026-11-15
+- Alliance screen opens on a delay so the game's world load cannot clear it
+
 ## 0.65-beta.4 · 2026-11-15
 - /x debug and /x bug work on Alliance characters
 
