@@ -2,6 +2,15 @@
 
 Newest first. Each build number matches `## Version` in `CROX/CROX.toc`, the login line in game, and the release on GitHub.
 
+## 0.61-beta
+- Yells are earned: only at real stakes (low health, a boss or elite, a long fight), with a rest between yells that follows your pace, and one shout at a time in a party
+- Text scale now applies when you let go of the slider, so it no longer jumps away from the mouse
+- Simulator: fake users are now simulated players (SimP) with their own pop-out window, a tab for each, and Randomize buttons that fill in the choices
+- Simulator: an Enemy dropdown (beasts, undead, demons, elementals, mechanicals, dragonkin, giants, aberrations, Alliance players, bosses and elites, casters, or a random mix)
+- Setup page: your name in a class-coloured box (first and last name from Total RP 3 when it is loaded), flavor text under each dropdown, an Another One button, colons on the labels
+- Pace levels renamed Hushed, Reserved, Social, Talkative, Chatty, Windbag and Deafening, with a note about other people's game at the two loudest
+- New Kor'kon page for officers and beta testers, and the version label now sits under the last tab
+
 ## 0.60-beta
 - We are officially in beta: the stage label is now just beta (0.60-beta), and the version number stays 0.60. No code changes since 0.60-alpha2.
 

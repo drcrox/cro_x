@@ -7,9 +7,9 @@
 
 local ADDON, ns = ...
 ns = ns or {}
-local VERSION = "0.60"
+local VERSION = "0.61"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.60-beta.10"
+local BUILD = "0.61-beta"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
