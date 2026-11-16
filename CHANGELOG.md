@@ -2,6 +2,13 @@
 
 Newest first. Each build number matches `## Version` in `CROX/CROX.toc`, the login line in game, and the release on GitHub.
 
+## 0.65-beta
+- Pace with nearby cro/x users outside a group: silent addon whispers share when you speak and yell (switch on the Setup page)
+- Party flood limits: one call for help at a time, a crowding limit on lines in ten seconds, and calls in the simulator are said, not yelled
+- Simulator: an Advanced section with mobs a pull, mob level, fight length, fights, rest time, party damage and a Random everything button
+- The addon reads a target's level: a trivial foe never earns a yell, and a skull-level one counts as stakes
+- Kor'kon is a section at the bottom of the Credits page
+
 ## 0.61-beta
 - Yells are earned: only at real stakes (low health, a boss or elite, a long fight), with a rest between yells that follows your pace, and one shout at a time in a party
 - Text scale now applies when you let go of the slider, so it no longer jumps away from the mouse
