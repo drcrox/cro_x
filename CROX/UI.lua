@@ -2016,7 +2016,8 @@ SLASH_CROX2 = "/crox"
 SlashCmdList["CROX"] = function(msg)
   msg = (msg or ""):lower():match("^%s*(.-)%s*$")
   if not ns.cdb then return end
-  if ns.isAlliance() then ns.showAlliance() return end
+  -- Alliance characters get the screen for every command, except the two for finding problems
+  if ns.isAlliance() and msg ~= "debug" and msg ~= "bug" and msg ~= "report" then ns.showAlliance() return end
   if msg == "" then ns.toggleMain()
   elseif msg == "flag" then ns.Log.openReview()
   elseif msg == "export" then ns.Log.openExport()
