@@ -226,5 +226,5 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 ### Setup page replaces the Character tab and the splash (0.57-alpha2.29)
 - The first section of the main window is now **Setup**; the Character tab and the separate splash window are gone. The addon opens straight to it (first run, login when "Open to this page at login" is on, `/x`, `/x setup`, reset). `/x splash` still works as an old name.
 - Setup holds: Who are you? (five dropdowns with descriptors, example line), How do you speak? (How chatty, In a raid, Ask for help, Answer a call, Troll voice for trolls, switches for Emotes, Allow /yell, Call and response, Take turns, Profanity filter, Window sounds), Read from the game (professions, spec lines unlocked), Done and Choose lines.
-- Options now keeps only: master on/off, Media references placeholder, Log, Beta testing, and Window (text scale, minimap, resets).
+- Options now keeps only: master on/off, Profession lines switch (cdb.profLines; gates profession tag lines, item-moment profession lines and gather/craft emotes), Media references placeholder, Log, Beta testing, and Window (text scale, minimap, resets).
 - Closing the window on the first run still finishes setup and offers the next step. Default window is 780x720.

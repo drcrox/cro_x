@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.30 · 2026-11-15
+- Profession lines switch in Options
+
 ## 0.57-alpha2.29 · 2026-11-15
 - Setup page replaces Character tab and splash; Options trimmed
 

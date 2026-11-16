@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.29"
+local BUILD = "0.57-alpha2.30"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -51,6 +51,7 @@ local DRIVES = {"honor", "coin", "vengeance", "faith", "glory", "duty"}
 ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
+  profLines = true,
   on = true, chatty = 3, raidChatty = 2, chattyScale = 2, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
@@ -481,7 +482,9 @@ local function tagGroups()
   if #home > 0 then add(10, home) end
   if cdb.upbringing then add(10, {"up:" .. cdb.upbringing}) end
   local profs = {}
-  for k in pairs(profile.profs or {}) do profs[#profs + 1] = "prof:" .. k end
+  if cdb.profLines ~= false then
+    for k in pairs(profile.profs or {}) do profs[#profs + 1] = "prof:" .. k end
+  end
   if #profs > 0 then add(10, profs) end
   return g
 end
@@ -975,7 +978,7 @@ local function onItem(slot, info, t)
   if moment == "item:healing" or moment == "item:mana" or moment == "item:rage" then pools[2] = "item:potion" end
   -- profession lines: about half the time when the character has that profession
   local prof = PROF_FOR_ITEM[moment]
-  if prof and profile.profs and profile.profs[prof] and math.random() < 0.5 then
+  if prof and cdb.profLines ~= false and profile.profs and profile.profs[prof] and math.random() < 0.5 then
     local cands = {}
     addCands(cands, "tag:prof:" .. prof, CROX2_TAGS["prof:" .. prof], ctx, {arch = moment, emote = false})
     if moment == "item:food" and profile.profs.fishing then
@@ -1133,7 +1136,7 @@ end
 local GATHER = {["Herb Gathering"] = "herbalism", ["Mining"] = "mining", ["Skinning"] = "skinning"}
 local PROF_EMOTE_COOLDOWN = 300
 local function profEmote(kind, prof)
-  if not cdb or not cdb.on or not cdb.emotes or ns.inCombat or ns.isAlliance() then return end
+  if not cdb or not cdb.on or not cdb.emotes or cdb.profLines == false or ns.inCombat or ns.isAlliance() then return end
   local t = now()
   if t - lastProfEmote < PROF_EMOTE_COOLDOWN then return end
   if math.random() >= 0.1 then return end
