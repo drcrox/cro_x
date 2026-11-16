@@ -692,7 +692,15 @@ local function buildLines(parent)
     else
       state.open = true
       pn:ClearAllPoints()
-      pn:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -4)
+      -- open where the mouse pointer is (the screen keeps it fully visible); under the button if that can't be read
+      local cx, cy = 0, 0
+      if GetCursorPosition then cx, cy = GetCursorPosition() end
+      local sc = (UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()) or 1
+      if cx and cy and cx > 0 and cy > 0 and sc > 0 then
+        pn:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", cx / sc - 16, cy / sc + 14)
+      else
+        pn:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -4)
+      end
       pn:Show()
     end
   end)

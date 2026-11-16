@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.17 · 2026-11-15
+- sets popout opens at the mouse pointer
+
 ## 0.57-alpha2.16 · 2026-11-15
 - sets chooser is a small popout under the button, not pushing the list
 
