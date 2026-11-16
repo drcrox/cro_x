@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.24"
+local BUILD = "0.57-alpha2.25"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -51,7 +51,7 @@ local DRIVES = {"honor", "coin", "vengeance", "faith", "glory", "duty"}
 ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
-  on = true, chatty = 2, emotes = true, yell = true, cr = true, turns = true,
+  on = true, chatty = 2, raidChatty = 1, sound = true, emotes = true, yell = true, cr = true, turns = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
   setupDone = false, off = {}, said = {}, last = {}, custom = {}, recipes = {}, recipeNames = {},
@@ -651,6 +651,12 @@ local HARD_GAP = 5          -- seconds between any two of your lines, always
 local spokeTimes = {}
 local lastSpoke = -1000
 ns.CHATTY = CHATTY
+-- the pace setting in force: raids have their own (quieter by default), everything else uses How chatty
+function ns.chattyNow()
+  local c = ns.cdb or cdb
+  if bool(safe(IsInRaid)) then return c.raidChatty or 1 end
+  return c.chatty or 2
+end
 
 function ns.sinceSpoke() return now() - lastSpoke end
 
@@ -666,7 +672,7 @@ end
 local function paceBlock(t, big)
   if t - lastSpoke < HARD_GAP then return "pace: " .. HARD_GAP .. "s between lines" end
   if big then return nil end
-  local ch = CHATTY[cdb.chatty] or CHATTY[2]
+  local ch = CHATTY[ns.chattyNow()] or CHATTY[2]
   if t - lastSpoke < ch.gap then return "pace: quiet gap" end
   if linesInLastMinute(t) >= ch.perMin then return "pace: " .. ch.perMin .. " lines a minute" end
   if ns.G and ns.G.paceBlock then
@@ -931,7 +937,7 @@ ns.debuffQueue = debuffQueue
 local function chanceOK(moment, big)
   if big then return true end
   local base = FREQ[moment] or 25
-  local mult = (CHATTY[cdb.chatty] or CHATTY[2]).mult
+  local mult = (CHATTY[ns.chattyNow()] or CHATTY[2]).mult
   return math.random() * 100 < base * mult
 end
 

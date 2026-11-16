@@ -188,7 +188,7 @@ function G.paceBlock(t)
   if t - lastPartySpoke < PARTY_HOLD then return "party: holding after someone spoke" end
   local n = 0
   for i = #partyTimes, 1, -1 do if t - partyTimes[i] < 60 then n = n + 1 else break end end
-  if n >= (PARTY_CAP[cdb.chatty] or 5) then return "party: pace for the whole party" end
+  if n >= (PARTY_CAP[ns.chattyNow()] or 5) then return "party: pace for the whole party" end
   if lastPartySpeaker == me() and t - lastPartySpoke < 20 then return "party: letting someone else talk" end
 end
 

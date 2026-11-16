@@ -229,6 +229,37 @@ check("splash re-open leaves the toggle alone", r == False, r)
 G.SlashCmdList.CROX("art")
 check("/x art does nothing now", G.CROX2ArtFrame is None)
 
+
+# --- splash speaking options, raid pace, sounds
+r = lua.eval('''function(ns)
+  local out = {}
+  ns.cdb.chatty = 3; ns.cdb.raidChatty = 1
+  local save = IsInRaid
+  IsInRaid = function() return false end
+  out.party = ns.chattyNow()
+  IsInRaid = function() return true end
+  out.raid = ns.chattyNow()
+  IsInRaid = save
+  ns.showSplash()
+  local sp = CROX2SplashFrame
+  out.hasSwitches = sp.switches.emotes ~= nil and sp.switches.yell ~= nil and sp.switches.cr ~= nil and sp.switches.turns ~= nil
+    and sp.switches.filter ~= nil and sp.switches.sound ~= nil
+  sp.switches.yell:SetChecked(false); sp.switches.yell:Click()
+  out.yellAfter = ns.cdb.yell
+  ns.cdb.yell = true
+  local played = 0
+  local oldPlay = PlaySound
+  PlaySound = function() played = played + 1 end
+  ns.cdb.sound = true; ns.W.sound("click"); out.soundOn = played
+  ns.cdb.sound = false; ns.W.sound("click"); out.soundOff = played
+  ns.cdb.sound = true; PlaySound = oldPlay
+  ns.cdb.chatty = 2
+  sp:Hide()
+  return out end''')(ns)
+check("raids use their own pace, everything else uses How chatty", r["party"] == 3 and r["raid"] == 1, (r["party"], r["raid"]))
+check("splash has the speaking switches and they change the setting", r["hasSwitches"] and r["yellAfter"] == False, r["yellAfter"])
+check("window sounds can be turned off", r["soundOn"] == 1 and r["soundOff"] == 1, (r["soundOn"], r["soundOff"]))
+
 # --- multi-speaker groundwork
 r = lua.eval('''function(ns)
   local G = ns.G

@@ -24,6 +24,7 @@ W.make = make
 
 function W.sound(which)
   if not PlaySound then return end
+  if ns.cdb and ns.cdb.sound == false then return end
   local kit = SOUNDKIT or {}
   local id = ({open = kit.IG_MAINMENU_OPEN or 850, close = kit.IG_MAINMENU_CLOSE or 851,
     tab = kit.IG_CHARACTER_INFO_TAB or 841, check = kit.IG_MAINMENU_OPTION_CHECKBOX_ON or 856,

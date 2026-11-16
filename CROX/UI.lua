@@ -290,6 +290,9 @@ local function buildOptions(parent)
   s.chatty = dropdown("How chatty", "Quiet is about 1-2 lines a minute, Normal about 2-4, Lively about 4-6. In a party the shared party pace still applies.",
     function() return {{1, "Quiet"}, {2, "Normal"}, {3, "Lively"}} end, function() return cdb().chatty end,
     function(v) cdb().chatty = v end)
+  s.raidChatty = dropdown("In a raid", "How chatty in a raid. Raids are noisy already, so this starts at Quiet. Outside a raid, How chatty applies.",
+    function() return {{1, "Quiet"}, {2, "Normal"}, {3, "Lively"}} end, function() return cdb().raidChatty or 1 end,
+    function(v) cdb().raidChatty = v end)
   check("emotes", "Emotes", "Emotes stay a rare accent either way.")
   check("yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies.")
   head("Group")
@@ -321,6 +324,7 @@ local function buildOptions(parent)
   W.tooltip(testBtn, "Why was it quiet?", "Prints, in your own chat only, the reasons your last few button presses stayed quiet. Same as /x test.")
   y = y - 32
   head("Window")
+  check("sound", "Window sounds", "The small clicks and chimes when cro/x windows open, close and change.")
   check("splash", "Show the splash page at login", "A short welcome when you log in. It closes by itself after a few seconds.")
   local slider = W.slider(s, "Text scale", 0.8, 1.4, 0.05, function() return cdb().textScale or 1 end,
     function(v) cdb().textScale = v if ns.relayout then ns.relayout() end end, function(v) return ("%d%%"):format(v * 100 + 0.5) end)
@@ -345,6 +349,7 @@ local function buildOptions(parent)
   function s:refresh()
     for key, c in pairs(checks) do c:SetChecked(cdb()[key] and true or false) end
     self.chatty.refresh()
+    self.raidChatty.refresh()
     self.troll.refresh()
     local troll = ns.isTroll()
     self.troll:SetShown(troll)
@@ -1405,7 +1410,7 @@ function ns.showSplash(onDone)
   if not splash then
     local savedSize = ns.db and ns.db.splashSize
     -- the same window frame as the main window: its title bar, crest and close button
-    splash = W.panel("CROX2SplashFrame", "Combat Roleplay Options - cro/x", savedSize and savedSize[1] or 560, savedSize and savedSize[2] or 440)
+    splash = W.panel("CROX2SplashFrame", "Combat Roleplay Options - cro/x", math.max(560, savedSize and savedSize[1] or 600), math.max(660, savedSize and savedSize[2] or 700))
     splash:ClearAllPoints()
     splash:SetPoint("CENTER", 0, 40)
     local crest = splash:CreateTexture(nil, "OVERLAY")
@@ -1414,8 +1419,8 @@ function ns.showSplash(onDone)
     crest:SetSize(20, 20)
     crest:SetPoint("TOPLEFT", 6, -2)
     splash:SetResizable(true)
-    if splash.SetResizeBounds then splash:SetResizeBounds(540, 440, 1100, 860)
-    elseif splash.SetMinResize then splash:SetMinResize(540, 440) splash:SetMaxResize(1100, 860) end
+    if splash.SetResizeBounds then splash:SetResizeBounds(560, 660, 1100, 960)
+    elseif splash.SetMinResize then splash:SetMinResize(560, 660) splash:SetMaxResize(1100, 960) end
     local inner = CreateFrame("Frame", nil, splash)
     inner:SetPoint("TOPLEFT", 8, -28)
     inner:SetPoint("BOTTOMRIGHT", -8, 8)
@@ -1472,8 +1477,71 @@ function ns.showSplash(onDone)
       hint:SetPoint("LEFT", dd, "RIGHT", -6, 2)
       splash.dds[kind] = dd
     end
-    local tip = W.hint(splash, "Type /x to open  ·  /x flag to review a fight  ·  change these any time under Character")
-    tip:SetPoint("TOP", plate, "BOTTOM", 0, -8)
+    -- how they speak: the pace, the group habits and the content switches, in a second plate
+    local plate2 = CreateFrame("Frame", nil, splash)
+    plate2:SetPoint("TOP", plate, "BOTTOM", 0, -8)
+    plate2:SetPoint("LEFT", splash, "LEFT", 28, 0)
+    plate2:SetPoint("RIGHT", splash, "RIGHT", -28, 0)
+    plate2:SetHeight(200)
+    local pt2 = plate2:CreateTexture(nil, "BACKGROUND")
+    pt2:SetAllPoints()
+    pt2:SetColorTexture(0, 0, 0, 0.62)
+    local head2 = W.heading(plate2, "How do you speak?")
+    head2:SetPoint("TOP", plate2, "TOP", 0, -10)
+    local grp2 = CreateFrame("Frame", nil, plate2)
+    grp2:SetSize(440, 150)
+    grp2:SetPoint("TOP", plate2, "TOP", 0, -34)
+    local PACE = function() return {{1, "Quiet"}, {2, "Normal"}, {3, "Lively"}} end
+    local function speakRow(i, text, hint, items, get, set)
+      local label = W.text(grp2, text, "GameFontNormal")
+      label:SetPoint("TOPLEFT", 0, -(i - 1) * 34 - 6)
+      local dd = W.dropdown(grp2, 170, items, get, set)
+      dd:SetPoint("TOPLEFT", 100, -(i - 1) * 34 + 2)
+      local h = W.text(grp2, hint, "GameFontDisableSmall")
+      h:SetPoint("LEFT", dd, "RIGHT", -6, 2)
+      return dd, label, h
+    end
+    splash.chattyDD = speakRow(1, "How chatty", "Lines a minute", PACE, function() return cdb().chatty end,
+      function(v) cdb().chatty = v splash:refreshChoices() end)
+    splash.raidDD = speakRow(2, "In a raid", "Raids start quiet", PACE, function() return cdb().raidChatty or 1 end,
+      function(v) cdb().raidChatty = v splash:refreshChoices() end)
+    local trollDD, trollL, trollH = speakRow(3, "Troll voice", "Accent or plain",
+      function() return {{"accent", "Accent"}, {"plain", "Plain"}} end, function() return cdb().troll end,
+      function(v) cdb().troll = v splash:refreshChoices() end)
+    splash.trollDD, splash.trollL, splash.trollH = trollDD, trollL, trollH
+    local SWITCHES = {
+      {"emotes", "Emotes", "Emotes stay a rare accent either way."},
+      {"yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies."},
+      {"cr", "Call and response", "Your character calls for help and answers other cro/x users in your group."},
+      {"turns", "Take turns with the party", "cro/x users in a party take turns instead of talking over each other."},
+      {"filter", "Profanity filter", "Real-world swear words are swapped for clean versions."},
+      {"sound", "Window sounds", "The small clicks and chimes when cro/x windows open and close."},
+    }
+    splash.switches = {}
+    for i, sw in ipairs(SWITCHES) do
+      local key = sw[1]
+      local c = W.check(grp2, sw[2], function(_, on) cdb()[key] = on and true or false if ns.refreshUI then ns.refreshUI() end end)
+      W.tooltip(c, sw[2], sw[3])
+      splash.switches[key] = c
+      c._index = i
+    end
+    -- the troll row only exists for a troll; everything below moves up when it isn't there
+    function splash:layoutSpeak()
+      local troll = ns.isTroll()
+      trollDD:SetShown(troll) trollL:SetShown(troll) trollH:SetShown(troll)
+      local top = (troll and 3 or 2) * 34 + 4
+      for key, c in pairs(self.switches) do
+        local i = c._index
+        c:ClearAllPoints()
+        c:SetPoint("TOPLEFT", ((i - 1) % 2) * 220, -top - math.floor((i - 1) / 2) * 26)
+        c:SetChecked(cdb()[key] ~= false and cdb()[key] ~= nil)
+      end
+      local gh = top + 3 * 26 + 4
+      grp2:SetHeight(gh)
+      plate2:SetHeight(34 + gh + 10)
+    end
+    local tip = W.hint(splash, "Type /x to open  ·  /x flag to review a fight  ·  change these any time in Options")
+    tip:SetPoint("TOP", plate2, "BOTTOM", 0, -8)
     local ver = W.hint(splash, ns.BUILD)
     ver:SetPoint("BOTTOMLEFT", 22, 20)
     local done = W.button(splash, "Done", 90, function() splash:Hide() end)
@@ -1504,6 +1572,8 @@ function ns.showSplash(onDone)
         if list[1] then c.homeland = list[1][1] end
       end
       for _, dd in pairs(self.dds) do dd.refresh() end
+      self.chattyDD.refresh() self.raidDD.refresh() self.trollDD.refresh()
+      self:layoutSpeak()
       local home
       for _, h in ipairs(ns.homelands()) do if h[1] == c.homeland then home = h[2] end end
       self.who:SetText(("%s · %s %s"):format(ns.profile.name or "", ns.profile.race or "", cap(ns.profile.class or "")))
