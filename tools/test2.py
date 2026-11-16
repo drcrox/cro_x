@@ -156,6 +156,9 @@ lt = lua.eval('''function(ns)
   st.moments = {}; st.sources = {class = true}; out.class = count()
   st.sources = {class = true, spec = true}; out.classSpec = count()
   st.moments = {kill = true}; st.sources = {base = true}; out.killBase = count()
+  st.moments = {opener = true}; st.sources = {base = true}; s:refresh()
+  out.trigOpener = s.rows[1] and s.rows[1].trig._text or "none"
+  st.moments = {kill = true}; s:refresh(); out.trigKill = s.rows[1] and s.rows[1].trig._text or "none"
   st.moments = {}; st.sources = {}; st.search = "zzzzqq"; out.none = count()
   st.search = ""; s.picker:Show(); s:refresh(); out.openOk = s.picker:IsShown() and s.picker:GetWidth() > 350 and s.picker:GetWidth() < 450 and s.picker.mBoxes[1].__pts == nil
   s.picker:SetSize(800, 500); local sc = s.picker._scripts and s.picker._scripts.OnSizeChanged; if sc then sc[1](s.picker) end
@@ -168,6 +171,7 @@ check("lines tab default shows the whole set", n_of(lt["default"]) > n_of(lt["op
 check("two moments combine (more than one, fewer than all)", n_of(lt["two"]) > n_of(lt["opener"]) and n_of(lt["two"]) < n_of(lt["default"]), (lt["opener"], lt["two"]))
 check("two sources combine", n_of(lt["classSpec"]) > n_of(lt["class"]) > 0, (lt["class"], lt["classSpec"]))
 check("moment and source filters combine", 0 < n_of(lt["killBase"]) < n_of(lt["default"]), lt["killBase"])
+check("each line says what can trigger it (abilities for an archetype, plain words for a kill)", "Charge" in lt["trigOpener"] and "Intercept" in lt["trigOpener"] and lt["trigOpener"].startswith("Can trigger on:") and "killing an enemy" in lt["trigKill"], (lt["trigOpener"], lt["trigKill"]))
 check("search with no match shows none; panel opens", n_of(lt["none"]) == 0 and lt["openOk"], lt["none"])
 
 # tabs

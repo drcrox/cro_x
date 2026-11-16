@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.19 · 2026-11-15
+- Lines tab shows what can trigger each line
+
 ## 0.57-alpha2.18 · 2026-11-15
 - sets popout is resizable, two columns by default
 

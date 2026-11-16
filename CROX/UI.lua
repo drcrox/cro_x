@@ -675,6 +675,40 @@ local function sourceKind(o)
   return "base"
 end
 
+-- what makes a moment fire, in plain words, for moments that aren't an ability
+local TRIGGER_TEXT = {
+  kill = "killing an enemy",
+  ["debuff:poisoned"] = "being poisoned", ["debuff:cursed"] = "being cursed", ["debuff:diseased"] = "catching a disease",
+  ["debuff:magic"] = "a harmful magic effect on you", ["debuff:physical"] = "a harmful physical effect on you (bleeds and the like)",
+  ["debuff:cc"] = "being stunned, feared or otherwise controlled",
+  ["x:cr"] = "a party or raid call you answer", ["x:dmg"] = "damage of that type landing", ["x:profemote"] = "using that profession",
+}
+-- Does this character know the spell? true / false, or nil when the client can't say.
+local function spellKnown(name)
+  local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(name)
+  local id = type(info) == "table" and info.spellID
+  if not id and GetSpellInfo then id = select(7, GetSpellInfo(name)) end
+  if not id then return nil end
+  if IsPlayerSpell then return IsPlayerSpell(id) and true or false end
+  if IsSpellKnown then return IsSpellKnown(id) and true or false end
+  return nil
+end
+-- abilities (this class, plus racials the character knows) that fire a moment; plain-words text for the rest
+local function triggersFor(moment)
+  if TRIGGER_TEXT[moment] then return nil, TRIGGER_TEXT[moment] end
+  if moment:find("^item:") then return nil, "using " .. (momentLabel(moment):lower():gsub("^any ", "a ")) end
+  local names = {}
+  local cls = CROX2_ABILITIES and CROX2_ABILITIES[ns.profile.class or ""] or {}
+  for name, a in pairs(cls) do
+    if not a.quiet and (a.arch == moment or a.friend == moment) and spellKnown(name) ~= false then names[#names + 1] = name end
+  end
+  for name, a in pairs((CROX2_ABILITIES or {}).ANY or {}) do
+    if not a.quiet and (a.arch == moment or a.friend == moment) and spellKnown(name) == true then names[#names + 1] = name end
+  end
+  table.sort(names)
+  return names
+end
+
 local function countKeys(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
 
 local function buildLines(parent)
@@ -799,7 +833,7 @@ local function buildLines(parent)
   local function rowFor(i)
     if s.rows[i] then return s.rows[i] end
     local r = CreateFrame("Frame", nil, s)
-    r:SetHeight(34)
+    r:SetHeight(46)
     r.check = W.check(r, "")
     r.check:SetPoint("LEFT", 0, 0)
     r.txt = W.text(r, "", "GameFontHighlight")
@@ -807,9 +841,22 @@ local function buildLines(parent)
     r.txt:SetWordWrap(false)
     r.sub = W.hint(r, "")
     r.sub:SetPoint("TOPLEFT", r.txt, "BOTTOMLEFT", 0, -2)
+    r.sub:SetWordWrap(false)
+    r.trig = W.hint(r, "")
+    r.trig:SetPoint("TOPLEFT", r.sub, "BOTTOMLEFT", 0, -2)
+    r.trig:SetWordWrap(false)
     r.hear = W.button(r, "Hear", 54)
     r.hear:SetPoint("RIGHT", 0, 0)
     W.tooltip(r.hear, "Hear", "Prints the line to your own chat window only.")
+    r:EnableMouse(true)
+    r:SetScript("OnEnter", function(self)
+      if not self.trigFull or self.trigFull == "" then return end
+      GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+      GameTooltip:SetText("Can trigger on", 1, 0.82, 0)
+      GameTooltip:AddLine(self.trigFull, 1, 1, 1, true)
+      GameTooltip:Show()
+    end)
+    r:SetScript("OnLeave", function() GameTooltip:Hide() end)
     s.rows[i] = r
     return r
   end
@@ -824,8 +871,10 @@ local function buildLines(parent)
         local prior = seen[o.id]
         if prior then
           prior.mlist[#prior.mlist + 1] = momentLabel(m)
+          prior.mkeys[#prior.mkeys + 1] = m
         else
           o.mlist = {m:find("^x:") and "" or momentLabel(m)}
+          o.mkeys = {m}
           seen[o.id] = o
           out[#out + 1] = o
         end
@@ -838,6 +887,33 @@ local function buildLines(parent)
     toggle:SetText(("Sets: %s · %s"):format(
       next(state.moments) and (countKeys(state.moments) .. " moment" .. (countKeys(state.moments) == 1 and "" or "s")) or "all moments",
       next(state.sources) and (countKeys(state.sources) .. " source" .. (countKeys(state.sources) == 1 and "" or "s")) or "all sources"))
+    local trigCache = {}
+    local function trigger(o)
+      local names, seen, plain = {}, {}, {}
+      for _, m in ipairs(o.mkeys or {}) do
+        local t = trigCache[m]
+        if not t then
+          local ab, text = triggersFor(m)
+          t = {ab = ab, text = text}
+          trigCache[m] = t
+        end
+        for _, n in ipairs(t.ab or {}) do if not seen[n] then seen[n] = true names[#names + 1] = n end end
+        if t.text and not seen[t.text] then seen[t.text] = true plain[#plain + 1] = t.text end
+      end
+      table.sort(names)
+      local parts = {}
+      if #names > 0 then parts[#parts + 1] = table.concat(names, ", ") end
+      for _, t in ipairs(plain) do parts[#parts + 1] = t end
+      local full = table.concat(parts, "; ")
+      local short = full
+      if #names > 6 then
+        local first = {}
+        for i = 1, 6 do first[i] = names[i] end
+        short = table.concat(first, ", ") .. (" +%d more"):format(#names - 6)
+        if #plain > 0 then short = short .. "; " .. table.concat(plain, "; ") end
+      end
+      return short, full
+    end
     local shown = {}
     for _, o in ipairs(gather()) do
       local okSrc = not next(state.sources) or state.sources[sourceKind(o)]
@@ -868,6 +944,10 @@ local function buildLines(parent)
       local n = cdb().said[o.id] or 0
       r.sub:SetText(("%s%s · %s"):format(o.src, #tags > 0 and (" · " .. table.concat(tags, ", ")) or "",
         off and "switched off" or ("said " .. n .. " time" .. (n == 1 and "" or "s"))))
+      local tshort, tfull = trigger(o)
+      if o.own then tshort, tfull = "", "" end
+      r.trig:SetText(tshort ~= "" and ("Can trigger on: " .. tshort) or "")
+      r.trigFull = tfull
       r.check:SetChecked(not off)
       r.check:SetScript("OnClick", function(self)
         if o.own then o.own.on = self:GetChecked() and true or false
@@ -879,7 +959,7 @@ local function buildLines(parent)
         p("|cffffffff" .. (o.line.e and text or ("\"" .. text .. "\"")) .. "|r  (only you see this)")
       end)
       r:Show()
-      y = y - 38
+      y = y - 50
     end
     if #shown > limit then
       self.moreBtn:SetText(("Show %d more (%d left)"):format(math.min(100, #shown - limit), #shown - limit))
@@ -894,7 +974,7 @@ local function buildLines(parent)
     self.height = -y + 44
   end
   function s:layout(w)
-    for _, r in ipairs(self.rows) do r.txt:SetWidth(w - 100) r.sub:SetWidth(w - 100) end
+    for _, r in ipairs(self.rows) do r.txt:SetWidth(w - 100) r.sub:SetWidth(w - 100) r.trig:SetWidth(w - 100) end
     return self.height or 200
   end
   s._state = state
