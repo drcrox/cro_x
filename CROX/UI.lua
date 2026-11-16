@@ -300,12 +300,15 @@ local function buildHome(parent)
     function(v) cdb().raidChatty = v s:refreshChoices() end,
     "How talkative you are in a raid, with the same five levels. Raids are noisy already, so this starts at Quiet.")
   s.raidDD, s.raidHint = raidDD, raidHint
-  s.askDD = speakRow(3, "Ask for help", "How often you call for aid", CR_LEVELS, function() return cdb().crAsk or 4 end,
-    function(v) cdb().crAsk = v end,
+  local askL, askH
+  s.askDD, askL, askH = speakRow(3, "Ask for help", "", CR_LEVELS, function() return cdb().crAsk or 4 end,
+    function(v) cdb().crAsk = v s:refreshChoices() end,
     "How often your character calls for help (a debuff, low health, an enemy on you) when a cro/x partymate could answer. Always means every time it fits.")
-  s.giveDD = speakRow(4, "Answer a call", "How often you speak when helping", CR_LEVELS, function() return cdb().crGive or 4 end,
-    function(v) cdb().crGive = v end,
+  local giveL, giveH
+  s.giveDD, giveL, giveH = speakRow(4, "Answer a call", "", CR_LEVELS, function() return cdb().crGive or 4 end,
+    function(v) cdb().crGive = v s:refreshChoices() end,
     "How often your character says something when they answer a call. They still help either way; Rarely just means they usually do it quietly.")
+  s.askHint, s.giveHint = askH, giveH
   local trollDD, trollL, trollH = speakRow(5, "Troll voice", "Accent or plain",
     function() return {{"accent", "Accent"}, {"plain", "Plain"}} end, function() return cdb().troll end,
     function(v) cdb().troll = v s:refreshChoices() end,
@@ -407,6 +410,9 @@ local function buildHome(parent)
     if changed or not self.example:GetText() or self.example:GetText() == "" then self:rollExample(changed) end
     self.chattyDD.refresh() self.raidDD.refresh() self.askDD.refresh() self.giveDD.refresh() self.trollDD.refresh()
     local function est(level) local ch = ns.CHATTY[level] return ch and ("About " .. ch.est) or "" end
+    local CR_EST = {[1] = "About 1 time in 4", [2] = "About every other time", [3] = "About 4 times in 5", [4] = "Every time it fits"}
+    self.askHint:SetText(CR_EST[c.crAsk or 4] or "")
+    self.giveHint:SetText(CR_EST[c.crGive or 4] or "")
     self.chattyHint:SetText(est(c.chatty or 3))
     self.raidHint:SetText(est(c.raidChatty or 2))
     self:layoutSpeak()
