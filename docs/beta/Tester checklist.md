@@ -2,9 +2,9 @@
 
 Copy this into a pinned message for each new build and change the version. Testers reply with what they could and couldn't do.
 
-**Build: 0.65-beta**
+**Build: 0.66-beta**
 
-Install: close the game, delete the old `Interface\AddOns\CROX` folder, unzip so the path is `Interface\AddOns\CROX\CROX.toc`, then log in. The login line should say `cro_x 0.65-beta loaded`.
+Install: close the game, delete the old `Interface\AddOns\CROX` folder, unzip so the path is `Interface\AddOns\CROX\CROX.toc`, then log in. The login line should say `cro_x 0.66-beta loaded`.
 
 ## Quick pass (10 minutes)
 

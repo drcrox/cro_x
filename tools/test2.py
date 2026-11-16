@@ -951,7 +951,7 @@ r = lua.eval('''function(ns)
   return {text = v and v:GetText(), shown = v and v._shown ~= false}
 end''')(ns)
 r = dict(r)
-check("the version label sits in the section list, under the Credits tab", r["shown"] and r["text"] and "0.65" in r["text"], r)
+check("the version label sits in the section list, under the Credits tab", r["shown"] and r["text"] and "0.66" in r["text"], r)
 
 # the Credits page has a Kor'kon section listing the officers and beta testers
 r = lua.eval('''function(ns)

@@ -2,6 +2,10 @@
 
 Newest first. Each build number matches `## Version` in `CROX/CROX.toc`, the login line in game, and the release on GitHub.
 
+## 0.66-beta
+- Alliance characters get the LOK'TAR OGAR screen automatically at login (it was being cleared as the world loaded)
+- Alliance login prints a one-line status in chat; /x debug and /x bug now work on Alliance characters
+
 ## 0.65-beta
 - Pace with nearby cro/x users outside a group: silent addon whispers share when you speak and yell (switch on the Setup page)
 - Party flood limits: one call for help at a time, a crowding limit on lines in ten seconds, and calls in the simulator are said, not yelled
