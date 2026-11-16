@@ -185,6 +185,7 @@ local SPLASH_HINTS = {pronouns = "Used in emotes"}
 -- Character tab and the splash page. The poster sits behind it, whole, fitted inside the area.
 local function buildHome(parent)
   local s = CreateFrame("Frame", nil, parent)
+  s.fill = true
   posterBG(s)
   local dim = s:CreateTexture(nil, "BACKGROUND", nil, 0)
   dim:SetAllPoints()
@@ -373,8 +374,8 @@ local function buildHome(parent)
   foot:SetPoint("TOPLEFT", tip, "BOTTOMLEFT", -4, -8)
   foot:SetPoint("RIGHT", s, "RIGHT", -8, 0)
   foot:SetHeight(30)
-  local ver = W.hint(foot, ns.BUILD)
-  ver:SetPoint("LEFT", 6, 0)
+  local ver = W.hint(s, ns.BUILD)       -- the bottom corner of the picture (the artist's signature is bottom right)
+  ver:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", 8, 6)
   local done = W.button(foot, "Done", 90, function() s:finish(false) end)
   done:SetPoint("RIGHT", 0, 0)
   local lines = W.button(foot, "Choose lines", 110, function() s:finish(true) end)
@@ -1153,6 +1154,53 @@ end
 ------------------------------------------------------------------------
 -- Section: Credits
 ------------------------------------------------------------------------
+-- Every slash command, in one place: the Commands section and /x help both read this list
+local COMMANDS = {
+  {"/x", "Open or close this window."},
+  {"/x setup", "Go to the Setup page."},
+  {"/x flag", "Review your recent fights and flag lines that felt wrong."},
+  {"/x export", "Copy your session log to paste into Discord, a form or an email."},
+  {"/x testdata", "Copy the data testing mode collected, with how to send it."},
+  {"/x sim", "Open the combat simulator."},
+  {"/x test", "Say why your last button presses stayed quiet."},
+  {"/x bug", "Build a short bug report to copy and send."},
+  {"/x probe", "Show what this game client lets cro/x read (talents, professions)."},
+  {"/x on  ·  /x off", "Turn cro/x on or off for this character."},
+  {"/x reset", "Put every option back to the defaults (it asks first)."},
+  {"/x debug", "Show or hide error messages in chat."},
+  {"/x help", "List these commands in chat."},
+  {"/crox", "The same as /x, if another addon already uses /x."},
+}
+
+local function buildCommands(parent)
+  local s = CreateFrame("Frame", nil, parent)
+  ns.paintArea(s, "page", 0.55)
+  s.rows = {}
+  local intro = W.hint(s, "Type these in chat. Key binding: Key Bindings > AddOns > cro/x > Review a fight.")
+  intro:SetPoint("TOPLEFT", 4, -4)
+  for i, c in ipairs(COMMANDS) do
+    local cmd = W.text(s, c[1], "GameFontNormal")
+    local desc = W.text(s, c[2], "GameFontHighlightSmall")
+    desc:SetWordWrap(true)
+    s.rows[i] = {cmd = cmd, desc = desc}
+  end
+  function s:layout(w)
+    local y = -28
+    local dw = math.max(120, w - 190)
+    for _, r in ipairs(self.rows) do
+      r.cmd:ClearAllPoints()
+      r.cmd:SetPoint("TOPLEFT", 8, y)
+      r.desc:ClearAllPoints()
+      r.desc:SetPoint("TOPLEFT", 160, y - 1)
+      r.desc:SetWidth(dw)
+      local h = math.max(18, (r.desc:GetStringHeight() or 14) + 6)
+      y = y - h
+    end
+    return -y + 16
+  end
+  return s
+end
+
 local function buildCredits(parent)
   local s = CreateFrame("Frame", nil, parent)
   ns.paintArea(s, "page", 0.55)
@@ -1199,7 +1247,7 @@ end
 -- The main window
 ------------------------------------------------------------------------
 local SECTIONS = {{"home", "Setup", buildHome}, {"options", "Options", buildOptions},
-  {"phrases", "My phrases", buildPhrases}, {"lines", "Lines", buildLines}, {"credits", "Credits", buildCredits}}
+  {"phrases", "My phrases", buildPhrases}, {"lines", "Lines", buildLines}, {"commands", "Commands", buildCommands}, {"credits", "Credits", buildCredits}}
 
 local hordePage, alliancePage, scrollFrame, scrollChild, listFrame
 
@@ -1260,6 +1308,7 @@ local function relayout()
     s:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, 0)
     s:SetWidth(cw)
     local h = s.layout and s:layout(cw) or 400
+    if s.fill then h = math.max(h, scrollFrame:GetHeight() or 0) end   -- a picture section runs to the bottom of the window
     s:SetHeight(h)
     scrollChild:SetHeight(h)
   end
@@ -1491,10 +1540,7 @@ end
 -- Slash commands: /x, with /crox as a second command that always works
 ------------------------------------------------------------------------
 local function help()
-  p("/x - open the window · /x flag - review a fight · /x export - copy your log · /x setup - redo setup")
-  p("/x reset - start over · /x probe - what this client offers")
-  p("/x bug - report a problem · /x test - why was that press quiet? · /x testdata - copy test data · /x sim - combat simulator")
-  p("/x on · /x off · /x help")
+  for _, c in ipairs(COMMANDS) do p(c[1] .. " - " .. c[2]) end
 end
 
 SLASH_CROX1 = "/x"

@@ -258,3 +258,7 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 - Names: Silent 0-1, Hushed 1-3, **Steady 2-4 (default)**, Vocal 3-5, Loud 4-6, Booming 5-7, Roaring 6-7. (The 2-4 level is no longer called Quiet, so the default doesn't read as quiet.)
 - The two rows on the Setup page are **On your own** (levels 1-5) and **In a group** (all seven). The group setting applies in any party or raid, not just raids; it is still stored as `raidChatty`. Default is Steady for both. Booming and Roaring exist only on the group setting.
 - A raid-wide cap (the proposal in the raid doc) is still future work, so for now a raid uses the same shared party-style budget at the loudest member's rate.
+
+### Commands tab, build in the corner (0.57-alpha2.40)
+- New **Commands** section lists every slash command (one `COMMANDS` list feeds both the tab and `/x help`).
+- The build text on the Setup page now sits in the bottom-left corner of the picture (bottom right is the artist's signature). The Setup section runs to the bottom of the window so the corner is the real corner.

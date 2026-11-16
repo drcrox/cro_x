@@ -131,7 +131,7 @@ clicks = lua.eval('''function(H)
   local done = {}
   for _, f in ipairs(H.frames) do
     local tx = rawget(f, "text")
-    if type(tx) == "table" and (tx._text == "Setup" or tx._text == "Options" or tx._text == "My phrases" or tx._text == "Lines" or tx._text == "Credits") then
+    if type(tx) == "table" and (tx._text == "Setup" or tx._text == "Options" or tx._text == "My phrases" or tx._text == "Lines" or tx._text == "Commands" or tx._text == "Credits") then
       f:Click()
       done[#done + 1] = tx._text
       main = CROX2MainFrame
@@ -140,7 +140,7 @@ clicks = lua.eval('''function(H)
     end
   end
   return table.concat(done, ",") end''')
-r = clicks(H); check("all four sections open at two sizes", r == "Setup,Options,My phrases,Lines,Credits", r)
+r = clicks(H); check("all four sections open at two sizes", r == "Setup,Options,My phrases,Lines,Commands,Credits", r)
 # --- lines tab: shows every line by default, tick boxes to combine sets
 lt = lua.eval('''function(ns)
   local s = ns._sections.lines
@@ -516,3 +516,16 @@ check("the simulator never sends real chat", r["nothingSent"])
 check("a pretend fight is captured as test data", r["fights"] >= 4, r["fights"])
 check("the test report has a summary and simulated fights", "SUMMARY" in r["rep"] and "(SIMULATED)" in r["rep"] and "pace" in r["rep"], r["rep"][:300])
 check("test data can be cleared", r["cleared"])
+
+# --- commands section and the build text in the picture's corner
+r = lua.eval('''function(ns)
+  ns.openSection("commands")
+  local c = ns._sections.commands
+  local rows = c and #c.rows or 0
+  local h = c and c:layout(500) or 0
+  ns.openSection("home")
+  local home = ns._sections.home
+  return {rows = rows, h = h, fill = home.fill == true}
+end''')(ns)
+check("commands section lists the commands", r["rows"] >= 12 and r["h"] > 100, (r["rows"], r["h"]))
+check("the setup picture section runs to the window's bottom", r["fill"])

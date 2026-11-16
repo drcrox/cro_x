@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.40 · 2026-11-15
+- Commands tab; build text in the picture corner
+
 ## 0.57-alpha2.39 · 2026-11-15
 - Level names, On your own / In a group
 
