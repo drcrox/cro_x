@@ -561,3 +561,31 @@ r = lua.eval('''function(ns)
 end''')(ns)
 check("locked spec lines are listed after the ones you can say", r["locked"] > 0 and r["open"] > 0 and "more to unlock" in r["count"], r)
 check("a locked line cannot be switched on or off", r["offSame"])
+
+# --- other classes' lines: visible in their own view, greyed, never switchable
+r = lua.eval('''function(ns)
+  ns.openSection("lines")
+  local L = ns._sections.lines
+  L._state.view = "others" L._state.sources = {} L._state.moments = {} L._state.limit = 800
+  L:refresh()
+  local out = {count = L.count._text}
+  local n, own, sameOff = 0, 0, true
+  local before = 0 for _ in pairs(ns.cdb.off) do before = before + 1 end
+  for _, row in ipairs(L.rows) do
+    if row._shown and row.sub and row.sub._text then
+      local t = row.sub._text
+      if t:find("only", 1, true) and t:find("not available", 1, true) then
+        n = n + 1
+        if t:lower():find("warrior only", 1, true) then own = own + 1 end
+        row.check:Click()
+      end
+    end
+  end
+  local after = 0 for _ in pairs(ns.cdb.off) do after = after + 1 end
+  out.n, out.own, out.same = n, own, before == after
+  L._state.view = "mine" L._state.limit = 100
+  L:refresh()
+  return out
+end''')(ns)
+check("other classes' lines are listed in their own view", r["n"] > 0 and "other classes" in r["count"], r)
+check("your own class never appears in the other-classes view and nothing switches", r["own"] == 0 and r["same"], r)

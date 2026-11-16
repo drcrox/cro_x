@@ -793,7 +793,7 @@ local function linesFor(moment)
 end
 
 -- can this character ever say the line? (temperament, race, class and tags; situational facts ignored)
-local function canSay(o, ignoreSpec)
+local function canSay(o, ignore)   -- ignore: "spec" = pretend the spec band is unlocked, "other" = pretend it is this class
   local line = o.line
   if o.own then return o.own.on ~= false end
   if line.o and line.o ~= cdb().temperament then return false end
@@ -805,7 +805,10 @@ local function canSay(o, ignoreSpec)
   end
   local id = o.id
   local pf = ns.profile
-  if id:find("^tag:class:") then return id:find("^tag:class:" .. (pf.class or "") .. "|") ~= nil end
+  if id:find("^tag:class:") then
+    if ignore == "other" then return true end
+    return id:find("^tag:class:" .. (pf.class or "") .. "|") ~= nil
+  end
   if id:find("^tag:drive:") then return id:find("^tag:drive:" .. (cdb().drive or "") .. "|") ~= nil end
   if id:find("^tag:up:") then return id:find("^tag:up:" .. (cdb().upbringing or "") .. "|") ~= nil end
   if id:find("^tag:home:") then
@@ -817,8 +820,9 @@ local function canSay(o, ignoreSpec)
     return pf.profs and pf.profs[k] and true or false
   end
   if o.cls then
+    if ignore == "other" then return true end
     if o.cls ~= pf.class then return false end
-    if ignoreSpec then return true end
+    if ignore == "spec" then return true end
     return ((pf.spec or {})[o.tree] or 0) >= (o.band or 1)
   end
   if id:find("^summon:") then return pf.class == "WARLOCK" end
@@ -885,7 +889,7 @@ local function countKeys(t) local n = 0 for _ in pairs(t) do n = n + 1 end retur
 local function buildLines(parent)
   local s = CreateFrame("Frame", nil, parent)
   -- empty moments / sources = everything; ticking some narrows to just those, in any combination
-  local state = {moments = {}, sources = {}, search = "", limit = 100, open = false}
+  local state = {moments = {}, sources = {}, search = "", limit = 100, open = false, view = "mine"}
   local momentItems = {}
   for _, l in ipairs({ARCH_LIST, MOMENT_LIST, EXTRA_LIST}) do for _, it in ipairs(l) do momentItems[#momentItems + 1] = it end end
   local function changed() state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end
@@ -921,6 +925,15 @@ local function buildLines(parent)
     ph:SetShown(state.search == "")
     changed()
   end)
+  -- two views: the character's own lines (with the spec lines still to unlock), and other classes' lines to look at
+  local viewBtns = {}
+  local function setView(v) state.view = v changed() end
+  viewBtns.mine = W.button(s, "Your lines", 110, function() setView("mine") end)
+  viewBtns.mine:SetPoint("TOPLEFT", 4, -28)
+  viewBtns.others = W.button(s, "Other classes", 120, function() setView("others") end)
+  viewBtns.others:SetPoint("LEFT", viewBtns.mine, "RIGHT", 4, 0)
+  W.tooltip(viewBtns.others, "Other classes", "Class tag lines and spec lines that belong to other classes, greyed out. Only to look at: your character can't say them and they can't be switched on.")
+  s.viewBtns = viewBtns
   -- the chooser is its own window that pops out at the pointer; it can be resized, and the checkboxes flow into
   -- as many columns as fit (two by default)
   local ROWH, COLW = 24, 172
@@ -1087,22 +1100,31 @@ local function buildLines(parent)
     end
     local shown, locked = {}, {}
     for _, o in ipairs(gather()) do
-      o.locked = nil
+      o.locked, o.other = nil, nil
       local okSrc = not next(state.sources) or state.sources[sourceKind(o)]
       local okSearch = state.search == "" or o.line.t:lower():find(state.search, 1, true)
       if okSrc and okSearch then
-        if canSay(o) then shown[#shown + 1] = o
-        elseif o.cls and canSay(o, true) then o.locked = true locked[#locked + 1] = o end    -- a spec line you could unlock
+        if state.view == "others" then
+          -- another class's tag or spec lines (anything else that is blocked stays hidden)
+          local cls = o.cls or o.id:match("^tag:class:([^|]+)")
+          if cls and cls ~= ns.profile.class and canSay(o, "other") then o.locked, o.other = true, cls shown[#shown + 1] = o end
+        elseif canSay(o) then shown[#shown + 1] = o
+        elseif o.cls and o.cls == ns.profile.class and canSay(o, "spec") then o.locked = true locked[#locked + 1] = o end    -- a spec line you could unlock
       end
     end
-    local sayable = #shown
+    local sayable = state.view == "others" and 0 or #shown
     for _, o in ipairs(locked) do shown[#shown + 1] = o end      -- locked ones come last
-    self.count:SetText(("%d line%s your character can say%s"):format(sayable, sayable == 1 and "" or "s",
-      #locked > 0 and (" · " .. #locked .. " more to unlock") or ""))
+    if state.view == "others" then
+      self.count:SetText(("%d line%s from other classes (to look at only)"):format(#shown, #shown == 1 and "" or "s"))
+    else
+      self.count:SetText(("%d line%s your character can say%s"):format(sayable, sayable == 1 and "" or "s",
+        #locked > 0 and (" · " .. #locked .. " more to unlock") or ""))
+    end
+    for k, b in pairs(self.viewBtns) do if b.SetEnabled then b:SetEnabled(state.view ~= k) end end
     self.count:ClearAllPoints()
-    self.count:SetPoint("TOPLEFT", 8, -32)
+    self.count:SetPoint("TOPLEFT", 8, -58)
     for _, r in ipairs(self.rows) do r:Hide() end
-    local y = -56
+    local y = -82
     local limit = math.min(#shown, state.limit)
     for i = 1, limit do
       local o = shown[i]
@@ -1121,13 +1143,14 @@ local function buildLines(parent)
       if o.line.r then tags[#tags + 1] = "rating " .. o.line.r end
       local n = cdb().said[o.id] or 0
       r.sub:SetText(("%s%s · %s"):format(o.src, #tags > 0 and (" · " .. table.concat(tags, ", ")) or "",
-        o.locked and ("|cffcc9933locked|r - " .. (off and "stays off" or "switches on by itself") .. " once you spend more talent points in " .. (o.tree or "this tree"))
+        o.other and ("|cff999999" .. cap(o.other:lower()) .. " only|r - not available to this character")
+          or o.locked and ("|cffcc9933locked|r - " .. (off and "stays off" or "switches on by itself") .. " once you spend more talent points in " .. (o.tree or "this tree"))
           or (off and "switched off" or ("said " .. n .. " time" .. (n == 1 and "" or "s")))))
       local tshort, tfull = trigger(o)
       if o.own then tshort, tfull = "", "" end
       r.trig:SetText(tshort ~= "" and ("Can trigger on: " .. tshort) or "")
       r.trigFull = tfull
-      r.check:SetChecked(not off)
+      r.check:SetChecked(not off and not o.other)
       if r.check.SetEnabled then r.check:SetEnabled(not o.locked) end
       r.check:SetScript("OnClick", function(self)
         if o.locked then self:SetChecked(false) return end      -- a locked line can be seen, never switched on

@@ -265,3 +265,6 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 
 ### Locked spec lines are visible (0.57-alpha2.41)
 - The Lines tab now also lists spec lines the character **could** unlock (their own class, any spec and band not yet unlocked), after the lines they can say. They are greyed and marked "locked", and their checkbox is disabled but shows the state the line will have (checked, so it switches on by itself once unlocked): a locked line can be read and heard but never switched on or off, and the engine never says it. The count reads "N lines your character can say · M more to unlock". Other classes' spec lines, and lines blocked by temperament or race, stay hidden (still no option to show lines the character cannot say).
+
+### Other classes' lines (0.57-alpha2.43)
+- The Lines tab has two views: **Your lines** (the default) and **Other classes**. The second lists other classes' tag lines and spec lines, greyed, unchecked, with "<Class> only - not available to this character". They can't be switched on, they are never said, and the moment, source and search filters still apply. Lines blocked by temperament or race stay hidden in both views.

@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.43 · 2026-11-15
+- Other classes' lines in their own greyed view
+
 ## 0.57-alpha2.42 · 2026-11-15
 - Locked lines show checked but greyed
 
