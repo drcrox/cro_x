@@ -288,6 +288,44 @@ check("every temperament, upbringing, drive and homeland has a descriptor", r["m
 check("splash shows the descriptor for the chosen temperament", r["hint"] == "Sure you're the best in the fight, and happy to say so.", r["hint"])
 check("splash shows an example line below the dropdowns", "Example:" in r["example"] and '"' in r["example"] and "Example:" in r["exampleDrive"], (r["example"], r["exampleDrive"]))
 
+
+# --- five paces with estimates, the migration from three, and the call-and-response dials
+r = lua.eval('''function(ns)
+  local out = {}
+  out.levels = #ns.CHATTY
+  local items = ns.chattyItems()
+  out.item1, out.item3, out.item5 = items[1][2], items[3][2], items[5][2]
+  local ps = {}
+  for i = 1, 5 do ps[i] = ns.CHATTY[i].perMin end
+  out.perMin = table.concat(ps, ",")
+  -- the three-level numbers move up by one, Normal staying Normal
+  local savedDB = CROX2CharDB
+  CROX2CharDB = {chatty = 2, raidChatty = 1}
+  ns.initDB()
+  out.migrated = ns.cdb.chatty .. "," .. ns.cdb.raidChatty .. "," .. ns.cdb.chattyScale
+  CROX2CharDB = {chatty = 3}
+  ns.initDB()
+  out.migratedLively = ns.cdb.chatty
+  CROX2CharDB = {}
+  ns.initDB()
+  out.fresh = ns.cdb.chatty .. "," .. ns.cdb.raidChatty .. "," .. ns.cdb.crAsk .. "," .. ns.cdb.crGive
+  CROX2CharDB = savedDB
+  ns.initDB()
+  -- the dials
+  local G = ns.G
+  ns.cdb.crAsk = 4 local always = true
+  for i = 1, 200 do if not G.crRoll("crAsk") then always = false end end
+  ns.cdb.crAsk = 1 local hits = 0
+  for i = 1, 2000 do if G.crRoll("crAsk") then hits = hits + 1 end end
+  out.always, out.rarely = always, hits / 2000
+  ns.cdb.crAsk = 4
+  return out end''')(ns)
+check("five paces with estimates", r["levels"] == 5 and "Hushed" in r["item1"] and "under 1" in r["item1"] and "2-4" in r["item3"] and "Chatterbox" in r["item5"], (r["item1"], r["item3"], r["item5"]))
+check("pace limits rise with each level", r["perMin"] == "1,2,4,6,9", r["perMin"])
+check("old three-level pace moves up one (Normal stays Normal)", r["migrated"] == "3,2,2" and r["migratedLively"] == 4, (r["migrated"], r["migratedLively"]))
+check("new characters start at Normal, raids Quiet, call dials Always", r["fresh"] == "3,2,4,4", r["fresh"])
+check("call dials: Always never skips, Rarely about a quarter", r["always"] and 0.18 < r["rarely"] < 0.32, r["rarely"])
+
 # --- multi-speaker groundwork
 r = lua.eval('''function(ns)
   local G = ns.G
@@ -349,7 +387,7 @@ check("openSection opens the main window", r["main"])
 
 # --- reset everything
 r = lua.eval('''function(ns)
-  ns.cdb.chatty = 3 ns.cdb.temperament = "grim" ns.cdb.splash = false ns.cdb.off = {x = true} ns.cdb.setupDone = true
+  ns.cdb.chatty = 5 ns.cdb.temperament = "grim" ns.cdb.splash = false ns.cdb.off = {x = true} ns.cdb.setupDone = true
   ns.cdb.custom = {{text = "mine", ch = "say"}}
   ns.db.bg = 3
   ns.confirmReset()
@@ -361,16 +399,16 @@ r = lua.eval('''function(ns)
     done = ns.cdb.setupDone, custom = #ns.cdb.custom, bg = ns.db.bg}
 end''')(ns)
 check("reset asks first", r["dlg"])
-check("reset restores defaults", r["chatty"] == 2 and r["temp"] == "gruff" and r["splash"] == True and r["off"] and r["done"] == False and r["bg"] is None)
+check("reset restores defaults", r["chatty"] == 3 and r["temp"] == "gruff" and r["splash"] == True and r["off"] and r["done"] == False and r["bg"] is None)
 check("reset keeps your own phrases", r["custom"] == 1)
 G.SlashCmdList.CROX("reset"); check("/x reset opens the confirm", G.CROX2ResetFrame._shown)
 r = lua.eval('''function(ns)
   CROX2SplashFrame:Hide() CROX2NextFrame:Hide()
-  ns.cdb.chatty = 3 ns.cdb.setupDone = true
+  ns.cdb.chatty = 5 ns.cdb.setupDone = true
   ns.doReset()
   return {splash = CROX2SplashFrame:IsShown(), chatty = ns.cdb.chatty, done = ns.cdb.setupDone}
 end''')(ns)
-check("reset brings the splash back for setup", r["splash"] and r["chatty"] == 2 and r["done"] == False, r)
+check("reset brings the splash back for setup", r["splash"] and r["chatty"] == 3 and r["done"] == False, r)
 
 # --- Alliance characters can switch the addon off, and back on
 H.me.faction = "Alliance"; ns.refreshProfile()

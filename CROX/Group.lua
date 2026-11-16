@@ -18,7 +18,7 @@ local pendingThanks          -- {helper, t}
 local lastCall = {}          -- [kind] = time
 local REPLY_WINDOW = 6
 local PARTY_HOLD = 5
-local PARTY_CAP = {[1] = 3, [2] = 5, [3] = 6}
+local PARTY_CAP = {[1] = 2, [2] = 3, [3] = 5, [4] = 6, [5] = 8}
 
 -- Multi-speaker groundwork (see docs/Raid and Multi-Speaker (proposal).md).
 -- A moment that several characters can answer is an "exchange": an id, the moment, who started it, and a list
@@ -226,8 +226,30 @@ local function sayCR(pool, kind, other, ctx)
     {channel = distanceChannel(other), kind = kind, noBroadcast = kind == "call"})
 end
 
+-- Call and response dials (Options > Group). Each is a level 1-4; 4 = always, as before. A is asking for help, B is
+-- answering one. Staying quiet never means refusing to help: the ability still goes off, only the line is skipped.
+-- Room left for the rest of the plan (see docs/Raid and Multi-Speaker (proposal).md): offering aid, chiming in on
+-- other people's A and B lines (C), and a party member remarking on a call that went unanswered.
+local CR_CHANCE = {[1] = 0.25, [2] = 0.5, [3] = 0.8, [4] = 1}
+G.CR_CHANCE = CR_CHANCE
+function G.crRoll(key)
+  local p = CR_CHANCE[(ns.cdb and ns.cdb[key]) or 4] or 1
+  return p >= 1 or math.random() < p
+end
+G.unanswered = 0
+
 -- B: the reply, when the caller's need is actually met
 local function reply(kind, caller, ctx)
+  if not G.crRoll("crGive") then
+    -- the help happened but this one stays quiet: the call goes unanswered (a later build can have the party remark on it)
+    local pr = pendingReply
+    pendingReply = nil
+    G.unanswered = G.unanswered + 1
+    for i = #exchanges, 1, -1 do
+      if pr and exchanges[i].id == pr.xid then exchanges[i].unanswered = true break end
+    end
+    return false
+  end
   local ok = sayCR("cr:" .. kind .. ":reply", "reply", caller, ctx)
   pendingReply = nil
   return ok
@@ -281,7 +303,9 @@ function G.onPress(info, t)
   local d = q[1]
   if d and FLAG_OF[d.kind or ""] and d.kind ~= "magic" and cooled("debuffhelp", 20) then
     local helper = helperFor(FLAG_OF[d.kind])
-    if helper then
+    if helper and not G.crRoll("crAsk") then
+      lastCall.debuffhelp = t        -- not asking this time; the normal callout goes ahead, ask again after the cooldown
+    elseif helper then
       table.remove(q, 1)
       local ctx = ns.makeCtx(nil, nil)
       ctx.debuffName, ctx.debuffType = d.name, d.kind
@@ -299,7 +323,9 @@ function G.onPress(info, t)
   local hp = ns.pct("player")
   if hp and hp < 35 and cooled("lowhealth", 30) then
     local helper = helperFor("H")
-    if helper then
+    if helper and not G.crRoll("crAsk") then
+      lastCall.lowhealth = t
+    elseif helper then
       if sayCR("cr:lowhealth:call", "call", helper) then
         lastCall.lowhealth = t
         local x = newExchangeId()
@@ -318,7 +344,9 @@ function G.onPress(info, t)
     if secret(onMe) then onMe = nil end
     if onMe then
       local helper = helperFor("T")
-      if helper and sayCR("cr:getoff:call", "call", helper) then
+      if helper and not G.crRoll("crAsk") then
+        lastCall.getoff = t
+      elseif helper and sayCR("cr:getoff:call", "call", helper) then
         lastCall.getoff = t
         local x = newExchangeId()
         noteExchange(x, "getoff", me(), {helper})

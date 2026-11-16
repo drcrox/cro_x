@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.28 · 2026-11-15
+- five paces with estimates, call-and-response dials (ask, answer), Use cro/x button
+
 ## 0.57-alpha2.27 · 2026-11-15
 - splash stays open until closed (auto-close removed)
 

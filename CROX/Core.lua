@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.27"
+local BUILD = "0.57-alpha2.28"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -51,7 +51,7 @@ local DRIVES = {"honor", "coin", "vengeance", "faith", "glory", "duty"}
 ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
-  on = true, chatty = 2, raidChatty = 1, sound = true, emotes = true, yell = true, cr = true, turns = true,
+  on = true, chatty = 3, raidChatty = 2, chattyScale = 2, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
   setupDone = false, off = {}, said = {}, last = {}, custom = {}, recipes = {}, recipeNames = {},
@@ -82,10 +82,17 @@ local function initDB()
   CROX2DB = CROX2DB or {}
   CROX2CharDB = CROX2CharDB or {}
   db, cdb = CROX2DB, CROX2CharDB
+  -- How chatty grew from three levels to five (Hushed added at the bottom, Chatterbox at the top): move old numbers up
+  if cdb.chatty ~= nil and (cdb.chattyScale or 1) < 2 then
+    cdb.chatty = math.min(5, math.max(1, tonumber(cdb.chatty) or 2) + 1)
+    if cdb.raidChatty ~= nil then cdb.raidChatty = math.min(5, math.max(1, tonumber(cdb.raidChatty) or 1) + 1) end
+    cdb.chattyScale = 2
+  end
   fillDefaults(db, ACCOUNT_DEFAULTS)
   fillDefaults(cdb, CHAR_DEFAULTS)
   ns.db, ns.cdb = db, cdb
 end
+ns.initDB = initDB
 
 ------------------------------------------------------------------------
 -- Who the character is
@@ -642,20 +649,29 @@ ns.channelFor = channelFor
 ------------------------------------------------------------------------
 -- Sending and pace
 ------------------------------------------------------------------------
+-- Five paces. mult scales how often a press speaks; gap = least seconds between lines; perMin = most lines a minute.
+-- est is the rough number of lines a minute to expect in a fight.
 local CHATTY = {
-  [1] = {mult = 0.6, gap = 20, perMin = 2},
-  [2] = {mult = 1.0, gap = 10, perMin = 4},
-  [3] = {mult = 1.5, gap = 7, perMin = 6},
+  [1] = {name = "Hushed", est = "under 1 a minute", mult = 0.35, gap = 30, perMin = 1},
+  [2] = {name = "Quiet", est = "1-2 a minute", mult = 0.6, gap = 20, perMin = 2},
+  [3] = {name = "Normal", est = "2-4 a minute", mult = 1.0, gap = 10, perMin = 4},
+  [4] = {name = "Lively", est = "4-6 a minute", mult = 1.5, gap = 7, perMin = 6},
+  [5] = {name = "Chatterbox", est = "6-9 a minute", mult = 2.2, gap = 5, perMin = 9},
 }
 local HARD_GAP = 5          -- seconds between any two of your lines, always
 local spokeTimes = {}
 local lastSpoke = -1000
 ns.CHATTY = CHATTY
+function ns.chattyItems()
+  local t = {}
+  for i, c in ipairs(CHATTY) do t[i] = {i, c.name .. " · " .. c.est} end
+  return t
+end
 -- the pace setting in force: raids have their own (quieter by default), everything else uses How chatty
 function ns.chattyNow()
   local c = ns.cdb or cdb
-  if bool(safe(IsInRaid)) then return c.raidChatty or 1 end
-  return c.chatty or 2
+  if bool(safe(IsInRaid)) then return c.raidChatty or 2 end
+  return c.chatty or 3
 end
 
 function ns.sinceSpoke() return now() - lastSpoke end
@@ -672,7 +688,7 @@ end
 local function paceBlock(t, big)
   if t - lastSpoke < HARD_GAP then return "pace: " .. HARD_GAP .. "s between lines" end
   if big then return nil end
-  local ch = CHATTY[ns.chattyNow()] or CHATTY[2]
+  local ch = CHATTY[ns.chattyNow()] or CHATTY[3]
   if t - lastSpoke < ch.gap then return "pace: quiet gap" end
   if linesInLastMinute(t) >= ch.perMin then return "pace: " .. ch.perMin .. " lines a minute" end
   if ns.G and ns.G.paceBlock then
@@ -937,7 +953,7 @@ ns.debuffQueue = debuffQueue
 local function chanceOK(moment, big)
   if big then return true end
   local base = FREQ[moment] or 25
-  local mult = (CHATTY[ns.chattyNow()] or CHATTY[2]).mult
+  local mult = (CHATTY[ns.chattyNow()] or CHATTY[3]).mult
   return math.random() * 100 < base * mult
 end
 

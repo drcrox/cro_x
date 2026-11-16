@@ -274,11 +274,11 @@ local function buildOptions(parent)
     y = y - 26
     return c
   end
-  local function dropdown(label, tip, items, get, set)
+  local function dropdown(label, tip, items, get, set, width)
     local l = W.text(s, label, "GameFontHighlight")
     l:SetPoint("TOPLEFT", 14, y - 6)
     l:SetWidth(170)
-    local dd = W.dropdown(s, 120, items, get, set)
+    local dd = W.dropdown(s, width or 120, items, get, set)
     dd:SetPoint("TOPLEFT", 170, y)
     W.tooltip(l, label, tip)
     y = y - 32
@@ -287,16 +287,20 @@ local function buildOptions(parent)
 
   head("Speaking")
   check("on", "cro/x on for this character", "The master switch for this character.")
-  s.chatty = dropdown("How chatty", "Quiet is about 1-2 lines a minute, Normal about 2-4, Lively about 4-6. In a party the shared party pace still applies.",
-    function() return {{1, "Quiet"}, {2, "Normal"}, {3, "Lively"}} end, function() return cdb().chatty end,
-    function(v) cdb().chatty = v end)
-  s.raidChatty = dropdown("In a raid", "How chatty in a raid. Raids are noisy already, so this starts at Quiet. Outside a raid, How chatty applies.",
-    function() return {{1, "Quiet"}, {2, "Normal"}, {3, "Lively"}} end, function() return cdb().raidChatty or 1 end,
-    function(v) cdb().raidChatty = v end)
+  s.chatty = dropdown("How chatty", "How many lines a minute to expect in a fight. Hushed is under 1, Quiet 1-2, Normal 2-4, Lively 4-6, Chatterbox 6-9. " ..
+    "These are rough: the real rate depends on how fast you press. In a party the shared party pace still applies.",
+    ns.chattyItems, function() return cdb().chatty end, function(v) cdb().chatty = v end, 190)
+  s.raidChatty = dropdown("In a raid", "How chatty in a raid, with the same five levels. Raids are noisy already, so this starts at Quiet. Outside a raid, How chatty applies.",
+    ns.chattyItems, function() return cdb().raidChatty or 2 end, function(v) cdb().raidChatty = v end, 190)
   check("emotes", "Emotes", "Emotes stay a rare accent either way.")
   check("yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies.")
   head("Group")
   check("cr", "Call and response", "Your character calls for help and answers other cro/x users in your group.")
+  local CR_LEVELS = function() return {{1, "Rarely"}, {2, "Sometimes"}, {3, "Often"}, {4, "Always"}} end
+  s.crAsk = dropdown("Ask for help", "How often your character calls for help (a debuff, low health, an enemy on you) when a cro/x partymate could answer. Always means every time it fits.",
+    CR_LEVELS, function() return cdb().crAsk or 4 end, function(v) cdb().crAsk = v end)
+  s.crGive = dropdown("Answer a call", "How often your character says something when they answer a call. They still help either way; Rarely just means they usually do it quietly.",
+    CR_LEVELS, function() return cdb().crGive or 4 end, function(v) cdb().crGive = v end)
   check("turns", "Take turns with the party", "cro/x users in a party take turns instead of talking over each other. Turning it off only affects you.")
   head("Content")
   check("filter", "Profanity filter", "Real-world swear words are swapped for clean versions. Your own lines are never changed.")
@@ -350,6 +354,8 @@ local function buildOptions(parent)
     for key, c in pairs(checks) do c:SetChecked(cdb()[key] and true or false) end
     self.chatty.refresh()
     self.raidChatty.refresh()
+    self.crAsk.refresh()
+    self.crGive.refresh()
     self.troll.refresh()
     local troll = ns.isTroll()
     self.troll:SetShown(troll)
@@ -1517,7 +1523,7 @@ function ns.showSplash(onDone)
     local grp2 = CreateFrame("Frame", nil, plate2)
     grp2:SetSize(440, 150)
     grp2:SetPoint("TOP", plate2, "TOP", 0, -34)
-    local PACE = function() return {{1, "Quiet"}, {2, "Normal"}, {3, "Lively"}} end
+    local PACE = ns.chattyItems
     local function speakRow(i, text, hint, items, get, set)
       local label = W.text(grp2, text, "GameFontNormal")
       label:SetPoint("TOPLEFT", 0, -(i - 1) * 34 - 6)
@@ -1527,10 +1533,12 @@ function ns.showSplash(onDone)
       h:SetPoint("LEFT", dd, "RIGHT", -6, 2)
       return dd, label, h
     end
-    splash.chattyDD = speakRow(1, "How chatty", "Lines a minute", PACE, function() return cdb().chatty end,
+    local chattyDD, _, chattyHint = speakRow(1, "How chatty", "", PACE, function() return cdb().chatty end,
       function(v) cdb().chatty = v splash:refreshChoices() end)
-    splash.raidDD = speakRow(2, "In a raid", "Raids start quiet", PACE, function() return cdb().raidChatty or 1 end,
+    splash.chattyDD, splash.chattyHint = chattyDD, chattyHint
+    local raidDD, _, raidHint = speakRow(2, "In a raid", "", PACE, function() return cdb().raidChatty or 2 end,
       function(v) cdb().raidChatty = v splash:refreshChoices() end)
+    splash.raidDD, splash.raidHint = raidDD, raidHint
     local trollDD, trollL, trollH = speakRow(3, "Troll voice", "Accent or plain",
       function() return {{"accent", "Accent"}, {"plain", "Plain"}} end, function() return cdb().troll end,
       function(v) cdb().troll = v splash:refreshChoices() end)
@@ -1572,7 +1580,7 @@ function ns.showSplash(onDone)
     ver:SetPoint("BOTTOMLEFT", 22, 20)
     local done = W.button(splash, "Done", 90, function() splash:Hide() end)
     done:SetPoint("BOTTOMRIGHT", -24, 46)
-    local open = W.button(splash, "Open cro/x", 110, function() splash.opened = true splash:Hide() if ns.toggleMain then ns.toggleMain() end end)
+    local open = W.button(splash, "Use cro/x", 110, function() splash.opened = true splash:Hide() if ns.toggleMain then ns.toggleMain() end end)
     open:SetPoint("RIGHT", done, "LEFT", -6, 0)
     -- yellow Blizzard checkbox, bottom right of the picture; unchecking stops the splash at login
     local show = W.check(splash, "Show at login", function(_, on) cdb().splash = on and true or false end)
@@ -1610,6 +1618,9 @@ function ns.showSplash(onDone)
       end
       if changed or not self.example:GetText() or self.example:GetText() == "" then self:rollExample(changed) end
       self.chattyDD.refresh() self.raidDD.refresh() self.trollDD.refresh()
+      local function est(level) local ch = ns.CHATTY[level] return ch and ("About " .. ch.est) or "" end
+      self.chattyHint:SetText(est(c.chatty or 3))
+      self.raidHint:SetText(est(c.raidChatty or 2))
       self:layoutSpeak()
       local home
       for _, h in ipairs(ns.homelands()) do if h[1] == c.homeland then home = h[2] end end

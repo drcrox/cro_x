@@ -42,6 +42,29 @@ No raid leader addon and no negotiation. Every addon sees the same roster and th
 2. **Alpha, after the first in-game results:** chorus slots and a raid budget, tested with two and then five real players.
 3. **Real raid testing** is its own milestone; it needs a crowd of cro_x users, so it likely belongs to beta.
 
+## Call and response dials (asked for 2026-11-15; first part built in 0.57-alpha2.28)
+The call and response is a small conversation with up to four parts. Naming them so the dials stay clear:
+- **A, the ask:** the caller asks for help (a debuff, low health, an enemy on them).
+- **B, the answer:** a partymate answers once their ability actually helps.
+- **C, the chime-in:** a third (or fourth) voice reacts to an A or a B ("That one's got it handled!").
+- **Offer:** a partymate volunteers help before anyone asks. Not built.
+
+The player-facing dials (Options > Group, level 1-4: Rarely 25%, Sometimes 50%, Often 80%, Always 100%):
+1. **Ask for help (built):** how often the character makes the A call when one fits. A skipped ask uses the normal debuff callout instead and waits out the same cooldown before trying again.
+2. **Answer a call (built):** how often the character says the B line when they help. They always still help; the ability goes off either way. Staying quiet is recorded on the exchange as unanswered (`unanswered` on the exchange, and a counter), which is the hook for the next item.
+3. **Offer aid (not built):** how often a character volunteers an A-style offer unprompted. Needs a new line pool and a trigger (an ally's health or debuff seen through the status messages the addons already share).
+4. **Chime in (not built):** how often other characters add a C line on someone else's A and B. Fits the multi-speaker ranking: the same ranked pick on every machine decides who chimes, so two people never chime at once, and the raid budget caps the total.
+
+**Unanswered-call framework (planned).** When an A goes out and the chosen B uses their next ability inside the reply window but doesn't speak, a C (a different partymember, picked by the same ranking) comments on it, completing the event. What this needs:
+- B's addon tells the group what happened: a tiny message with the exchange id saying "B pressed something and chose not to answer" (or just "answered" when they do). Today only a reply's chat line and an SP message show an answer.
+- The ranking picks C from the people who are neither A nor B.
+- A small pool of "ignored call" lines (about 5-8, for temperaments, e.g. "Don't mind them - I've got you!").
+- A guard so a skipped answer caused by the B player being out of range or dead doesn't count as being ignored.
+- The raid budget and scope rules above still apply.
+This is why the unanswered mark is already stored: the data exists before the feature does.
+
+How chatty has five levels as of 0.57-alpha2.28 (Hushed, Quiet, Normal, Lively, Chatterbox) with rough lines-a-minute estimates; raids have their own pace setting. A future "chime in" dial and the raid budget should read from the same pace table.
+
 ## Open questions
 - Should a raid hear the caller's line at all outside the caller's party (range and channel: /say reaches only nearby players, /yell more; RAID chat would be a different thing)?
 - Raid cap: one number, or scaled by raid size?
