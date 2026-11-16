@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.60-beta.10 · 2026-11-15
+- Kor'kon page under Credits (officers and beta testers)
+
 ## 0.60-beta.9 · 2026-11-15
 - version label under the Credits tab
 

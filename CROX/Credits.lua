@@ -38,3 +38,10 @@ CROX2_CREDITS = {
     },
   },
 }
+
+
+-- The Kor'kon page: officers and the people who help beta test. Add a name to the list to add them to the page.
+CROX2_KORKON = {
+  intro = "Officers and the people who help beta test.",
+  names = {"Brentos", "Flatzz", "Seadub"},
+}

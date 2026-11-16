@@ -1667,10 +1667,42 @@ local function buildCredits(parent)
 end
 
 ------------------------------------------------------------------------
+-- Section: Kor'kon (officers and beta testers)
+------------------------------------------------------------------------
+local function buildKorkon(parent)
+  local s = CreateFrame("Frame", nil, parent)
+  ns.paintArea(s, "page", 0.55)
+  local k = CROX2_KORKON or {}
+  s.head = W.heading(s, "Kor'kon:")
+  s.head:SetPoint("TOPLEFT", 4, -6)
+  s.intro = W.text(s, k.intro or "", "GameFontHighlight")
+  s.intro:SetPoint("TOPLEFT", 4, -28)
+  s.intro:SetWordWrap(true)
+  s.names = {}
+  for _, name in ipairs(k.names or {}) do
+    local fs = W.text(s, name, "GameFontNormalLarge")
+    fs:SetTextColor(1, 1, 1)
+    s.names[#s.names + 1] = fs
+  end
+  function s:layout(w)
+    self.intro:SetWidth(w - 12)
+    local y = -28 - (self.intro:GetStringHeight() or 16) - 14
+    for _, fs in ipairs(self.names) do
+      fs:ClearAllPoints()
+      fs:SetPoint("TOPLEFT", 16, y)
+      y = y - 26
+    end
+    return -y + 20
+  end
+  return s
+end
+
+------------------------------------------------------------------------
 -- The main window
 ------------------------------------------------------------------------
 local SECTIONS = {{"home", "Setup", buildHome}, {"options", "Options", buildOptions},
-  {"phrases", "My phrases", buildPhrases}, {"lines", "Lines", buildLines}, {"commands", "Commands", buildCommands}, {"credits", "Credits", buildCredits}}
+  {"phrases", "My phrases", buildPhrases}, {"lines", "Lines", buildLines}, {"commands", "Commands", buildCommands}, {"credits", "Credits", buildCredits},
+  {"korkon", "Kor'kon", buildKorkon}}
 
 local hordePage, alliancePage, scrollFrame, scrollChild, listFrame
 
@@ -1932,7 +1964,7 @@ function ns.confirmReset()
   resetDlg:Show()
 end
 
--- open the main window on one section (home, options, phrases, lines, credits)
+-- open the main window on one section (home, options, phrases, lines, commands, credits, korkon)
 function ns.openSection(key)
   if ns.isAlliance() then ns.showAlliance() return end
   if not main then buildMain() end
