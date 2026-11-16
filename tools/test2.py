@@ -305,7 +305,7 @@ r = lua.eval('''function(ns)
   out.always, out.rarely = always, hits / 2000
   ns.cdb.crAsk = 4
   return out end''')(ns)
-check("five paces with estimates", r["levels"] == 5 and "Hushed" in r["item1"] and "1-2 a minute" in r["item1"] and "3-4 a minute" in r["item3"] and "Chatterbox" in r["item5"], (r["item1"], r["item3"], r["item5"]))
+check("five paces with estimates", r["levels"] == 5 and "Hushed" in r["item1"] and "minute" not in r["item1"] and "Normal" in r["item3"] and "Chatterbox" in r["item5"], (r["item1"], r["item3"], r["item5"]))
 check("pace rates rise with each level", r["perMin"] == "1.5,2.5,3.5,4.5,5.5", r["perMin"])
 check("old three-level pace moves up one (Normal stays Normal)", r["migrated"] == "3,2,2" and r["migratedLively"] == 4, (r["migrated"], r["migratedLively"]))
 check("new characters start at Normal, raids Quiet, call dials Always", r["fresh"] == "3,2,4,4", r["fresh"])

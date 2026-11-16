@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.34"
+local BUILD = "0.57-alpha2.35"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -676,7 +676,7 @@ local REFRACTORY = 10       -- seconds over which the chance recovers after a li
 ns.CHATTY = CHATTY
 function ns.chattyItems()
   local t = {}
-  for i, c in ipairs(CHATTY) do t[i] = {i, c.name .. " · " .. c.est} end
+  for i, c in ipairs(CHATTY) do t[i] = {i, c.name} end
   return t
 end
 -- the pace setting in force: raids have their own (quieter by default), everything else uses How chatty
