@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.60-beta.3 · 2026-11-15
+- Randomize buttons fill the dropdowns with the rolled choices
+
 ## 0.60-beta.2 · 2026-11-15
 - fake users: the f.u. boxes set the party size, and the fake users get their own pop-out window with one tab each (changes kept as you make them)
 

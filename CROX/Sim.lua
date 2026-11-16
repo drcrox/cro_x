@@ -541,7 +541,7 @@ local function buildFakeWindow()
   end
   win.title2 = W.heading(win, "")
   win.title2:SetPoint("TOPLEFT", 14, -64)
-  local sub = W.hint(win, "Leave anything on Random and it is rolled fresh every run. Only combinations the game allows are offered.")
+  local sub = W.hint(win, "Leave anything on Random and it is rolled fresh every run; the Randomize buttons fill the choices in so you can see them. Only combinations the game allows are offered.")
   sub:SetPoint("TOPLEFT", 14, -82)
   sub:SetWidth(470)
 
@@ -643,16 +643,31 @@ local function buildFakeWindow()
     self:refreshTabs()
     loading = false
   end
-  local function rollOne(def) for _, k in ipairs(FIELDS) do def[k] = "random" end def.name = "" end
+  -- the Randomize buttons roll real choices and put them in the dropdowns, so you can see who will be added
+  local function taken(except)
+    local t = {[ns.profile and ns.profile.name or ""] = true}
+    for i = 1, partyN() do
+      if i ~= except and fakes()[i] and (fakes()[i].name or "") ~= "" then t[fakes()[i].name] = true end
+    end
+    return t
+  end
+  local function roll(slot)
+    local r = Sim.resolve(blankDef(), taken(slot))
+    local c = {}
+    for _, k in ipairs(FIELDS) do c[k] = r[k] end
+    c.name = r.name
+    return c
+  end
   local rnd = W.button(win, "Randomize this one", 140, function()
-    rollOne(d)
-    nameBox:SetText("")
+    local c = roll(win.slot)
+    for k, v in pairs(c) do d[k] = v end
+    nameBox:SetText(c.name)
     refreshAll()
     save()
   end)
   rnd:SetPoint("BOTTOMLEFT", 14, 14)
   local rndAll = W.button(win, "Randomize all", 110, function()
-    for i = 1, partyN() do fakes()[i] = blankDef() end
+    for i = 1, partyN() do fakes()[i] = roll(i) end
     win:showSlot(win.slot)
     refreshBoxes()
   end)

@@ -815,6 +815,16 @@ r = lua.eval('''function(ns, H)
   -- a random fake keeps "Random" in storage and is made legal when the party is built
   local d = S.resolve(ns.cdb.simFakes[1], {})
   out.legal = d.race == "Tauren" and d.class ~= "ROGUE"
+  -- Randomize this one fills the dropdowns with real choices that are legal
+  local function findBtn(text) for _, ch in ipairs(H.frames) do if ch._parent == w and ch._text == text then return ch end end end
+  findBtn("Randomize this one"):Click()
+  out.rolled = w.def.race ~= "random" and w.def.class ~= "random" and w.def.name ~= "" and w.def.spec ~= "random" and w.def.homeland ~= "random"
+  out.rolledSaved = ns.cdb.simFakes[1].race == w.def.race and ns.cdb.simFakes[1].name == w.def.name
+  out.rolledLegal = w.def.class ~= "ROGUE" or w.def.race ~= "Tauren"
+  findBtn("Randomize all"):Click()
+  local allFilled = true
+  for i = 1, 3 do local c = ns.cdb.simFakes[i] if c.race == "random" or c.name == "" or c.pace == "random" then allFilled = false end end
+  out.allFilled = allFilled
   f.boxes[2]:Click()                                   -- shrink to two: tab 3 goes, its data stays
   out.two = S.fakeCount() == 2 and w.tabs[3]._shown ~= true and ns.cdb.simFakes[3] ~= nil
   f.boxes[4]:Click()
@@ -828,6 +838,7 @@ r = dict(r)
 check("four f.u. boxes pick how many fake users are in the party", r["boxes"] == 4 and r["zero"] and r["count"] == 3, r)
 check("the fake users have their own window with one tab each", r["window"] and r["tabs"] == 3 and r["hasNoDone"], r)
 check("a tab keeps its fake user's choices and stays legal", r["onTab2"] and r["tab2Blank"] and r["kept"] and r["legal"], r)
+check("Randomize fills the dropdowns with real, legal choices", r["rolled"] and r["rolledSaved"] and r["rolledLegal"] and r["allFilled"], r)
 check("the party can shrink, grow and be cleared", r["two"] and r["four"] and r["none"], r)
 
 # --- Setup page: Character tags tabs, with a box on what the character has
