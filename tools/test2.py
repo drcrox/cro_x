@@ -131,7 +131,7 @@ clicks = lua.eval('''function(H)
   local done = {}
   for _, f in ipairs(H.frames) do
     local tx = rawget(f, "text")
-    if type(tx) == "table" and (tx._text == "Setup" or tx._text == "Options" or tx._text == "My phrases" or tx._text == "Lines" or tx._text == "Commands" or tx._text == "Credits" or tx._text == "Kor'kon") then
+    if type(tx) == "table" and (tx._text == "Setup" or tx._text == "Options" or tx._text == "My phrases" or tx._text == "Lines" or tx._text == "Commands" or tx._text == "Credits") then
       f:Click()
       done[#done + 1] = tx._text
       main = CROX2MainFrame
@@ -140,7 +140,7 @@ clicks = lua.eval('''function(H)
     end
   end
   return table.concat(done, ",") end''')
-r = clicks(H); check("all four sections open at two sizes", r == "Setup,Options,My phrases,Lines,Commands,Credits,Kor'kon", r)
+r = clicks(H); check("all four sections open at two sizes", r == "Setup,Options,My phrases,Lines,Commands,Credits", r)
 # --- lines tab: folio tabs by group, a row of tabs inside the group, and other classes' lines to look at
 lt = lua.eval('''function(ns)
   local s = ns._sections.lines
@@ -953,18 +953,18 @@ end''')(ns)
 r = dict(r)
 check("the version label sits in the section list, under the Credits tab", r["shown"] and r["text"] and "0.61" in r["text"], r)
 
-# the Kor'kon page lists the officers and beta testers
+# the Credits page has a Kor'kon section listing the officers and beta testers
 r = lua.eval('''function(ns)
-  ns.openSection("korkon")
-  local s = ns._sections.korkon
-  local names = {}
-  for _, fs in ipairs(s.names) do names[#names + 1] = fs:GetText() end
+  ns.openSection("credits")
+  local s = ns._sections.credits
   local h = s:layout(500)
+  local t = s.korkonText and s.korkonText:GetText() or ""
+  local only = ns._sections.korkon == nil
   ns.openSection("home")
-  return {names = table.concat(names, ","), head = s.head:GetText(), tall = h > 80}
+  return {head = s.korkonHead and s.korkonHead:GetText(), text = t, tall = h > 80, noOwnTab = only}
 end''')(ns)
 r = dict(r)
-check("the Kor'kon page lists the officers and beta testers", r["names"] == "Brentos,Flatzz,Seadub" and r["head"] == "Kor'kon:" and r["tall"], r)
+check("the Kor'kon section sits in the Credits page, not its own tab", r["head"] == "Kor'kon:" and "Brentos" in r["text"] and "Flatzz" in r["text"] and "Seadub" in r["text"] and r["noOwnTab"], r)
 
 # --- Setup page: Character tags tabs, with a box on what the character has
 r = lua.eval('''function(ns)

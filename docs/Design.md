@@ -316,5 +316,5 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 ## Version under the Credits tab (0.60-beta.9)
 - The version label (for example 0.60-beta.9) moved from the Setup page's bottom-left corner to the section list, directly under the Credits tab, so it shows on every page. In a window so narrow that the tabs lie in a row along the top, it is hidden.
 
-## Kor'kon page (0.60-beta.10)
-- A new section under Credits in the window's list: **Kor'kon**, for the officers and the people who help beta test. It lists Brentos, Flatzz and Seadub. The names live in `CROX2_KORKON` in Credits.lua (add a name there to add someone). The version label sits under the last tab, so it is now under Kor'kon.
+## Kor'kon section in Credits (0.61-beta.1)
+- Kor'kon is a section at the bottom of the Credits page, not a tab of its own (it was a tab for one build, 0.60-beta.10 to the 0.61 release). Heading "Kor'kon:", then "Officers and the people who help beta test." and the names: Brentos, Flatzz, Seadub. The names live in `CROX2_KORKON` in Credits.lua (add a name there to add someone). The version label is back under the last tab, Credits.
