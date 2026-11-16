@@ -1,8 +1,8 @@
 name: Release
 
 # Every push to main: read the version from CROX.toc. If there is no release for it yet,
-# zip the CROX folder and publish a pre-release with the zip attached. Names look like the early releases did:
-# tag v<version>, title "cro/x v<version>", file cro_x_v<version>.zip (for example v0.62-beta).
+# zip the CROX folder and publish a pre-release with the zip attached. Names look like the early releases did, with
+# the stage word left off: version 0.62-beta in CROX.toc is published as tag v0.62, title "cro/x v0.62", file cro_x_v0.62.zip.
 on:
   push:
     branches: [main]
@@ -26,24 +26,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # looks for the tag with and without the v, so versions released before the v naming are not released twice
+          # looks for every name a release has had, so a version released under an older naming is not released twice
           v="${{ steps.ver.outputs.version }}"
-          if gh release view "v${v}" >/dev/null 2>&1 || gh release view "${v}" >/dev/null 2>&1; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+          short="${v%%-*}"
+          if gh release view "v${short}" >/dev/null 2>&1 || gh release view "v${v}" >/dev/null 2>&1 || gh release view "${v}" >/dev/null 2>&1; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build the zip
         if: steps.exists.outputs.found == 'false'
-        run: zip -r "cro_x_v${{ steps.ver.outputs.version }}.zip" CROX
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          zip -r "cro_x_v${v%%-*}.zip" CROX
       - name: Publish the release
         if: steps.exists.outputs.found == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           v="${{ steps.ver.outputs.version }}"
+          short="${v%%-*}"
           {
-            echo "## cro/x v${v}"
+            echo "## cro/x v${short}"
             echo
             awk -v h="## ${v}" '$0==h{f=1;next} /^## /{f=0} f' CHANGELOG.md
             echo "Install: close the game, delete the old Interface/AddOns/CROX folder, unzip so the path is Interface/AddOns/CROX/CROX.toc. The login line in game should say cro_x ${v}."
             echo
             echo "Report problems in game with /x bug. Tester checklist: docs/beta/Tester checklist.md"
           } > notes.md
-          gh release create "v${v}" "cro_x_v${v}.zip" --title "cro/x v${v}" --prerelease --notes-file notes.md
+          gh release create "v${short}" "cro_x_v${short}.zip" --title "cro/x v${short}" --prerelease --notes-file notes.md
