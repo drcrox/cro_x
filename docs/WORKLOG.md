@@ -1,10 +1,13 @@
 # Working builds (private, not published)
 
+## 0.60-beta.4 · 2026-11-15
+- enemy kinds in the sim (Enemy dropdown); fake users renamed simulated players (SimP)
+
 ## 0.60-beta.3 · 2026-11-15
 - Randomize buttons fill the dropdowns with the rolled choices
 
 ## 0.60-beta.2 · 2026-11-15
-- fake users: the f.u. boxes set the party size, and the fake users get their own pop-out window with one tab each (changes kept as you make them)
+- simulated players: the SimP boxes set the party size, and the simulated players get their own pop-out window with one tab each (changes kept as you make them)
 
 ## 0.60-beta.1 · 2026-11-15
 - yells are earned: stakes, a gap that follows the pace, one shout at a time in a party; text scale applies when you let go of the slider
@@ -13,7 +16,7 @@
 - fix: window layout ran before the page list existed (error on opening)
 
 ## 0.57-alpha2.46 · 2026-11-15
-- simulator: virtual clock, 2x-Instant, fake users; character tags tabs; origin/motivation; poster on every page; login switch bottom left
+- simulator: virtual clock, 2x-Instant, simulated players; character tags tabs; origin/motivation; poster on every page; login switch bottom left
 
 ## 0.57-alpha2.45 · 2026-11-15
 - tag chips on the Lines page; profession combat lines switch with a sample window

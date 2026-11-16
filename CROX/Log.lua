@@ -26,7 +26,7 @@ function Log.init()
 end
 
 local function testing() return ns.cdb and ns.cdb.testing == true end
--- while the simulator is playing a fake user, nothing is logged
+-- while the simulator is playing a simulated player, nothing is logged
 local function muted() return ns.simActor ~= nil and not ns.simActor.user end
 
 function Log.fightStart(sim)

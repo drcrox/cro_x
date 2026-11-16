@@ -11,7 +11,7 @@ Newest first. Each build number matches `## Version` in `CROX/CROX.toc`, the log
 - Seven pace levels (Silent to Roaring) on a speech budget; separate On your own and In a group settings; party pacing set by the loudest member
 - Lines page as folio tabs by moment, with tag chips to hide a kind of line while you search, locked spec lines shown checked and greyed, and a view-only Other classes tab
 - Profession combat lines switch with a sample window showing what each line triggers on
-- Testing mode (off by default) and a combat simulator window that runs on its own clock at 2x, 4x, 6x or Instant, with up to four customizable fake users
+- Testing mode (off by default) and a combat simulator window that runs on its own clock at 2x, 4x, 6x or Instant, with up to four customizable simulated players
 - Origin and Motivation are the new names for Upbringing and What drives them
 
 ## 0.57-alpha2

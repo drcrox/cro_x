@@ -699,7 +699,7 @@ check("the sample window opens", r["shown"] == True, r)
 check("samples say when profession lines are off", "switched off" in r["offText"], r["offText"][:120])
 
 
-# --- simulator: virtual clock, speeds, fake users
+# --- simulator: virtual clock, speeds, simulated players
 r = lua.eval('''function(ns, H)
   local S = ns.Sim
   local out = {}
@@ -757,11 +757,11 @@ r = lua.eval('''function(ns, H)
   return out
 end''')(ns, H)
 r = dict(r)
-check("random fake users always get a combination the game allows", r["bad"] == 0, r)
+check("random simulated players always get a combination the game allows", r["bad"] == 0, r)
 check("no Tauren rogues and no Forsaken hunters", r["tauRogue"] == 0 and r["undHunt"] == 0 and not r["hunterForsaken"], r)
-check("a fake user comes out complete", r["skyHome"] and r["named"], r)
+check("a simulated player comes out complete", r["skyHome"] and r["named"], r)
 check("an instant party sim finishes at once, off the real clock, and sends nothing", r["finishedAtOnce"] and r["clockUntouched"] and r["nothingSent"], r)
-check("the fake users speak in the sim window", r["grukk"] > 0 and r["maren"] > 0, r)
+check("the simulated players speak in the sim window", r["grukk"] > 0 and r["maren"] > 0, r)
 check("the real character is put back after a party sim", r["restored"] and r["noSimLeft"] and r["saidBack"], r)
 
 r = lua.eval('''function(ns, H)
@@ -785,7 +785,7 @@ end''')(ns, H)
 r = dict(r)
 check("2x advances half a pretend second a tick, 6x one and a half", abs(r["adv2"] - 0.5) < 0.01 and abs(r["adv6"] - 1.5) < 0.01, r)
 
-# the f.u. boxes set the party size; their own window has one tab per fake user
+# the SimP boxes set the party size; their own window has one tab per simulated player
 r = lua.eval('''function(ns, H)
   local S = ns.Sim
   local out = {}
@@ -794,7 +794,7 @@ r = lua.eval('''function(ns, H)
   local f = CROX2SimFrame
   out.boxes = #f.boxes
   out.zero = S.fakeCount() == 0
-  f.boxes[3]:Click()                                   -- "3 f.u." = three fake users in the party
+  f.boxes[3]:Click()                                   -- "3 SimP" = three simulated players in the party
   out.count = S.fakeCount()
   local w = f.popup
   out.window = w ~= nil and w._shown == true and w._parent == UIParent       -- its own window, not inside the sim's
@@ -835,11 +835,57 @@ r = lua.eval('''function(ns, H)
   return out
 end''')(ns, H)
 r = dict(r)
-check("four f.u. boxes pick how many fake users are in the party", r["boxes"] == 4 and r["zero"] and r["count"] == 3, r)
-check("the fake users have their own window with one tab each", r["window"] and r["tabs"] == 3 and r["hasNoDone"], r)
-check("a tab keeps its fake user's choices and stays legal", r["onTab2"] and r["tab2Blank"] and r["kept"] and r["legal"], r)
+check("four SimP boxes pick how many simulated players are in the party", r["boxes"] == 4 and r["zero"] and r["count"] == 3, r)
+check("the simulated players have their own window with one tab each", r["window"] and r["tabs"] == 3 and r["hasNoDone"], r)
+check("a tab keeps its simulated player's choices and stays legal", r["onTab2"] and r["tab2Blank"] and r["kept"] and r["legal"], r)
 check("Randomize fills the dropdowns with real, legal choices", r["rolled"] and r["rolledSaved"] and r["rolledLegal"] and r["allFilled"], r)
 check("the party can shrink, grow and be cleared", r["two"] and r["four"] and r["none"], r)
+
+# enemy kinds in the sim: the addon sees the right facts about the target
+r = lua.eval('''function(ns, H)
+  local S = ns.Sim
+  local out = {}
+  ns.cdb.on = true ns.cdb.simFakes = {} ns.cdb.simFakeN = nil
+  S.open()
+  local f = CROX2SimFrame
+  out.hasDD = f.ed ~= nil and f.enemy == "mix"
+  local want = {beast = "beast", undead = "undead", demon = "demon", elemental = "elemental", mechanical = "mechanical",
+    dragonkin = "dragonkin", giant = "giant", aberration = "aberration", humanoid = "humanoid"}
+  local bad = {}
+  for key, ct in pairs(want) do
+    S.start(1, 1, key)
+    for i = 1, 60 do S.step() if ns.simActor and ns.simActor.sim.tgt.exists then break end end
+    local t = ns.simActor.sim.tgt
+    if t.ctype ~= ct or t.player or t.boss then bad[#bad + 1] = key end
+    S.stop()
+  end
+  out.types = #bad == 0 and "ok" or table.concat(bad, ",")
+  S.start(1, 1, "alliance")
+  for i = 1, 60 do S.step() if ns.simActor and ns.simActor.sim.tgt.exists then break end end
+  local t = ns.simActor.sim.tgt
+  out.player = t.player == true and t.faction == "Alliance" and t.race ~= nil and t.ctype == "humanoid"
+  S.stop()
+  S.start(1, 1, "boss")
+  for i = 1, 60 do S.step() if ns.simActor and ns.simActor.sim.tgt.exists then break end end
+  out.boss = ns.simActor.sim.tgt.boss == true
+  S.stop()
+  -- a random mix over many pulls shows several kinds
+  local seen, n = {}, 0
+  for i = 1, 60 do
+    S.start(1, 1, "mix")
+    for j = 1, 60 do S.step() if ns.simActor and ns.simActor.sim.tgt.exists then break end end
+    local k = ns.simActor.sim.tgt.player and "player" or (ns.simActor.sim.tgt.boss and "boss" or ns.simActor.sim.tgt.ctype)
+    if not seen[k] then seen[k] = true n = n + 1 end
+    S.stop()
+  end
+  out.kinds = n
+  return out
+end''')(ns, H)
+r = dict(r)
+check("the enemy dropdown is in the sim window, default random mix", r["hasDD"], r)
+check("each creature type reaches the addon as that type", r["types"] == "ok", r)
+check("an Alliance player enemy has faction, race and is a player; a boss is flagged", r["player"] and r["boss"], r)
+check("a random mix fights several kinds", r["kinds"] >= 5, r["kinds"])
 
 # --- Setup page: Character tags tabs, with a box on what the character has
 r = lua.eval('''function(ns)

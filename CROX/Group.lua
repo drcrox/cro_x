@@ -93,7 +93,7 @@ local function send(kind, ...)
   if not ch then return end
   local parts = {"V2", kind, tostring(mySubgroup())}
   for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
-  if ns.simParty then       -- the simulator: queue it for the other fake characters, as the game would deliver it
+  if ns.simParty then       -- the simulator: queue it for the other simulated players, as the game would deliver it
     G.simInbox[#G.simInbox + 1] = {from = ns.simActor, msg = table.concat(parts, "|")}
     return
   end
@@ -488,7 +488,7 @@ ev:SetScript("OnEvent", function(_, event, ...)
 end)
 
 ------------------------------------------------------------------------
--- Simulator support: each fake character keeps its own roster, pending replies and call times; the party budget
+-- Simulator support: each simulated player keeps its own roster, pending replies and call times; the party budget
 -- is shared (in the game every addon ends up with nearly the same one)
 ------------------------------------------------------------------------
 G.simInbox = {}
@@ -508,7 +508,7 @@ function G.simFlags(class, spec)
   if (class == "WARRIOR" and spec == "Protection") or (class == "DRUID" and spec == "Feral") then f = f .. "K" end
   return f
 end
--- deliver everything queued: each message goes to every other fake character, through the real receiving code
+-- deliver everything queued: each message goes to every other simulated player, through the real receiving code
 function G.simFlush(forEach)
   local guard = 0
   while #G.simInbox > 0 and guard < 200 do

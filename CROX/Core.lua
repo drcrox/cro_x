@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.60"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.60-beta.3"
+local BUILD = "0.60-beta.4"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -1432,7 +1432,7 @@ function ns.simSnapshot() local c = {said = {}, last = {}} for k, v in pairs(cdb
 function ns.simRestore(c) if c then cdb.said, cdb.last = c.said, c.last end end
 
 
--- Fake users for the simulator. An actor is {profile, cdb, db, state, sim, user}: the line-picking code reads "the
+-- Simulated players for the simulator. An actor is {profile, cdb, db, state, sim, user}: the line-picking code reads "the
 -- character" from the profile and cdb it holds, so becoming an actor swaps those (and the pace memory) in, and
 -- swapping back puts the real character back exactly as it was. Nothing here touches the real game or its saved data.
 function ns.simNewCharDB(over)

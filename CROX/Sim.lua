@@ -4,7 +4,7 @@
 -- put back when the test stops.
 --
 -- Time is pretend too: the sim runs on its own clock (ns.simClock) at 2x, 4x, 6x or instantly, never in real time.
--- Up to four fake users (f.u.) can join the party. Each is a full character (race, class, background, pace) that
+-- Up to four simulated players (SimP) can join the party. Each is a full character (race, class, background, pace) that
 -- runs the same line-picking and group code as the real one, so party pacing, calls and replies play out for real.
 
 local ADDON, ns = ...
@@ -20,8 +20,40 @@ local SCENARIOS = {
 local SPEEDS = {{1, "2x", 2}, {2, "4x", 4}, {3, "6x", 6}, {4, "Instant", 0}}
 local STEP = 0.25          -- pretend seconds per step
 local REAL_TICK = 0.25     -- real seconds between ticks
-local FOES = {"Razormane Scout", "Venture Co. Laborer", "Bristleback Hunter", "Kolkar Raider",
-  "Burning Blade Cultist", "Gnoll Brute", "Dustwind Harpy", "Defias Pillager"}
+-- What the sim can fight. Each kind sets the facts the addon reads about a target: creature type, boss or elite,
+-- an enemy player and their race, and how often it casts (so interrupt lines get tested). The fight itself plays the
+-- same for all of them.
+local ENEMIES = {
+  {"humanoid", "Humanoid", ctype = "humanoid", foes = {"Razormane Scout", "Venture Co. Laborer", "Bristleback Hunter", "Kolkar Raider",
+    "Burning Blade Cultist", "Gnoll Brute", "Defias Pillager"}},
+  {"beast", "Beast", ctype = "beast", foes = {"Mottled Boar", "Dire Mottled Boar", "Plainstrider", "Savannah Prowler", "Venomtail Scorpid",
+    "Dustwind Harpy", "Elder Mangy Wolf"}},
+  {"undead", "Undead", ctype = "undead", foes = {"Rotting Dead", "Skeletal Warrior", "Scarlet Zombie", "Shambling Ghoul", "Restless Shade"}},
+  {"demon", "Demon", ctype = "demon", foes = {"Felguard Sentry", "Fel Hound", "Voidwalker", "Burning Imp", "Doomguard Lackey"}},
+  {"elemental", "Elemental", ctype = "elemental", foes = {"Living Flame", "Dust Devil", "Stonelash Elemental", "Water Spirit"}},
+  {"mechanical", "Mechanical", ctype = "mechanical", foes = {"Harvest Golem", "Rogue Clockwork", "Scrapyard Automaton"}},
+  {"dragonkin", "Dragonkin", ctype = "dragonkin", foes = {"Black Whelp", "Scalebane Drakeling", "Red Dragonspawn"}},
+  {"giant", "Giant", ctype = "giant", foes = {"Hill Giant", "Mosshide Ogre", "Brutish Ogre Warrior"}},
+  {"aberration", "Aberration", ctype = "aberration", foes = {"Gelatinous Ooze", "Toxic Slime", "Mire Crawler"}},
+  {"alliance", "Alliance player", ctype = "humanoid", player = true, faction = "Alliance",
+    foes = {"Aldric", "Thorgrim", "Lirien", "Fizzwick", "Brannoc", "Selwyn", "Tamsin"},
+    races = {{"Human", "Human"}, {"Dwarf", "Dwarf"}, {"NightElf", "Night Elf"}, {"Gnome", "Gnome"}, {"Draenei", "Draenei"}, {"Skyborne", "Skyborne"}}},
+  {"boss", "Boss or elite", ctype = "humanoid", boss = true, foes = {"Warlord Kragmar", "Captain Redjaw", "Gorefang the Elder", "The Pale Matron"}},
+  {"caster", "Caster", ctype = "humanoid", cast = 0.3, foes = {"Defias Conjurer", "Dark Cultist", "Burning Blade Warlock", "Frostmane Shaman"}},
+}
+local ENEMY_BY = {}
+for _, e in ipairs(ENEMIES) do ENEMY_BY[e[1]] = e end
+-- pick the enemy for one pull: a named kind, or a random mix
+local function pickEnemy(key)
+  local e = ENEMY_BY[key or ""] or ENEMIES[math.random(#ENEMIES)]
+  local info = {kind = e[1], kindName = e[2], ctype = e.ctype, player = e.player or false, faction = e.faction, boss = e.boss or false, cast = e.cast or 0.08}
+  info.name = e.foes[math.random(#e.foes)]
+  if e.races then
+    local r = e.races[math.random(#e.races)]
+    info.race, info.raceName = r[1], r[2]
+  end
+  return info
+end
 local REST = 6          -- pretend seconds between pulls
 
 ------------------------------------------------------------------------
@@ -65,7 +97,7 @@ function Sim.homelandsFor(race)
   return CROX2_HOMELANDS[HOME_KEY[race] or race] or {}
 end
 
--- turn a fake user's choices (any of them may be "random") into a complete character that obeys the game's race
+-- turn a simulated player's choices (any of them may be "random") into a complete character that obeys the game's race
 -- and class combinations. taken = names already in use.
 function Sim.resolve(def, taken)
   local d = {}
@@ -107,14 +139,14 @@ end
 local function fakes() ns.cdb.simFakes = ns.cdb.simFakes or {} return ns.cdb.simFakes end
 local FIELDS = {"race", "class", "spec", "depth", "pronouns", "temperament", "upbringing", "drive", "homeland", "pace"}
 local function blankDef() local d = {name = ""} for _, k in ipairs(FIELDS) do d[k] = "random" end return d end
--- how many fake users are in the party: set by the f.u. boxes (saves from before the boxes counted: the slots filled in a row)
+-- how many simulated players are in the party: set by the SimP boxes (saves from before the boxes counted: the slots filled in a row)
 local function partyN()
   local n = ns.cdb.simFakeN
   if n == nil then n = 0 while n < 4 and fakes()[n + 1] do n = n + 1 end end
   return math.max(0, math.min(4, n))
 end
 function Sim.fakeCount() return partyN() end
--- set the party to n fake users; the ones already built are kept (also when the party shrinks and grows again)
+-- set the party to n simulated players; the ones already built are kept (also when the party shrinks and grows again)
 function Sim.setCount(n)
   n = math.max(0, math.min(4, math.floor(n or 0)))
   ns.cdb.simFakeN = n
@@ -153,8 +185,10 @@ local function byArch(class)
 end
 
 local function foeTarget(r)
-  return {exists = true, name = r.foe, enemy = true, friend = false, self = false, player = false, ctype = "humanoid",
-    hp = r.foeHp, dead = r.foeHp <= 0, casting = r.casting, guid = "sim-" .. r.pull, boss = r.scen and r.scen.boss or false}
+  local f = r.foeInfo or {}
+  return {exists = true, name = r.foe, enemy = true, friend = false, self = false, player = f.player or false, ctype = f.ctype or "humanoid",
+    race = f.race, faction = f.faction, hp = r.foeHp, dead = r.foeHp <= 0, casting = r.casting, guid = "sim-" .. r.pull,
+    boss = (r.scen and r.scen.boss) or f.boss or false}
 end
 local function selfTarget(a)
   return {exists = true, name = a.name, enemy = false, friend = false, self = true, player = true,
@@ -289,7 +323,8 @@ end
 
 local function startPull(t)
   run.pull = run.pull + 1
-  run.foe = FOES[math.random(#FOES)]
+  run.foeInfo = pickEnemy(run.enemy)
+  run.foe = run.foeInfo.name
   run.foeHp, run.casting, run.killed = 100, false, false
   run.start = t
   run.phase = "fight"
@@ -306,7 +341,10 @@ local function startPull(t)
     ns.simFight(true)
   end
   ns.simBecome(userActor)
-  say(("%s-- Pull %d: %s --"):format(stamp(), run.pull, run.foe), 0.7, 0.7, 0.7)
+  local fi = run.foeInfo
+  local what = fi.player and ("Alliance " .. (fi.raceName or "") .. " player") or ((fi.boss and "boss or elite " or "") .. (fi.ctype or ""))
+  if fi.kind == "caster" then what = "caster" end
+  say(("%s-- Pull %d: %s (%s) --"):format(stamp(), run.pull, run.foe, what), 0.7, 0.7, 0.7)
 end
 
 local function endPull(t)
@@ -381,7 +419,7 @@ function Sim.step()
   end
   local elapsed = t - run.start
   run.foeHp = run.killed and 0 or math.max(0, 100 - 100 * elapsed / run.scen.dur + (math.random() - 0.5) * 3)
-  run.casting = math.random() < 0.08
+  run.casting = math.random() < ((run.foeInfo and run.foeInfo.cast) or 0.08)
   run.rot = (run.rot + 1) % #actors
   for k = 0, #actors - 1 do
     stepActor(actors[(run.rot + k) % #actors + 1], t, elapsed)
@@ -419,7 +457,7 @@ end
 function Sim.running() return run ~= nil end
 function Sim.setSpeed(i) if SPEEDS[i] then if frame then frame.speed = i end if run then run.speed = i end end end
 
-function Sim.start(scenario, speed)
+function Sim.start(scenario, speed, enemy)
   if run then return end
   if not ns.cdb or not ns.cdb.on then say("cro/x is switched off for this character. Turn it on first (/x on).", 1, 0.5, 0.5) return end
   if ns.isAlliance and ns.isAlliance() then return end
@@ -455,7 +493,7 @@ function Sim.start(scenario, speed)
   local hasTank = false
   for _, a in ipairs(actors) do if a.tank then hasTank = true end end
   run = {scen = scen, pull = 0, phase = "rest", nextAt = clock0, foeHp = 100, casting = false, vt = 0, clock0 = clock0,
-    speed = speed, rot = 0, nextRoster = clock0, hasTank = hasTank}
+    speed = speed, rot = 0, nextRoster = clock0, hasTank = hasTank, enemy = enemy or (frame and frame.enemy) or "mix"}
   ns.simOut = chatLine
   ns.simQuiet = function(ctx, moment, why)
     if details then
@@ -492,7 +530,7 @@ function Sim.stop(finished)
 end
 
 ------------------------------------------------------------------------
--- The window: chat area, controls, the f.u. boxes and the fake-user popup
+-- The window: chat area, controls, the SimP boxes and the simulated players' window
 ------------------------------------------------------------------------
 local function fakeLabel(d)
   local function v(x) return (x == nil or x == "random") and "random" or x end
@@ -504,16 +542,16 @@ local function refreshBoxes()
   if not frame then return end
   local n = partyN()
   for i, b in ipairs(frame.boxes) do
-    b:SetText(i <= n and ("|cffffd100" .. i .. " f.u.|r") or (i .. " f.u."))
+    b:SetText(i <= n and ("|cffffd100" .. i .. " SimP|r") or (i .. " SimP"))
   end
   if frame.none then frame.none:SetText(n == 0 and "|cffffd100None|r" or "None") end
 end
 
--- The fake users' own window, a separate pop-out beside the simulator: one tab per fake user in the party, each tab
+-- The simulated players' own window, a separate pop-out beside the simulator: one tab per simulated player in the party, each tab
 -- holding that character's choices. Changes are kept as you make them. "Random" is kept as Random and rolled fresh
 -- each run, always inside the game's race and class combinations.
 local function buildFakeWindow()
-  local win = W.panel("CROX2SimFakesFrame", "cro/x - fake users", 500, 342)
+  local win = W.panel("CROX2SimFakesFrame", "cro/x - simulated players", 500, 342)
   win:ClearAllPoints()
   win:SetPoint("TOPLEFT", frame, "TOPRIGHT", 4, 0)
   local d = {}
@@ -532,10 +570,10 @@ local function buildFakeWindow()
   end
   win.save = save
 
-  -- tabs: f.u. 1 .. f.u. 4, only as many as the party has
+  -- tabs: SimP 1 .. SimP 4, only as many as the party has
   win.tabs = {}
   for i = 1, 4 do
-    local b = W.button(win, "f.u. " .. i, 84, function() win:showSlot(i) end)
+    local b = W.button(win, "SimP " .. i, 84, function() win:showSlot(i) end)
     if i == 1 then b:SetPoint("TOPLEFT", 12, -34) else b:SetPoint("LEFT", win.tabs[i - 1], "RIGHT", 4, 0) end
     win.tabs[i] = b
   end
@@ -623,11 +661,11 @@ local function buildFakeWindow()
     local n = partyN()
     for i, b in ipairs(self.tabs) do
       b:SetShown(i <= n)
-      b:SetText(i == self.slot and ("|cffffd100f.u. " .. i .. "|r") or ("f.u. " .. i))
+      b:SetText(i == self.slot and ("|cffffd100SimP " .. i .. "|r") or ("SimP " .. i))
       if i == self.slot then b:LockHighlight() else b:UnlockHighlight() end
     end
   end
-  -- show one fake user's tab (what was on the last tab was already kept as it was changed)
+  -- show one simulated player's tab (what was on the last tab was already kept as it was changed)
   function win:showSlot(slot)
     slot = math.max(1, math.min(slot or 1, math.max(1, partyN())))
     self.slot = slot
@@ -638,7 +676,7 @@ local function buildFakeWindow()
     for k, v in pairs(cur) do d[k] = v end
     d.name = cur.name or ""
     nameBox:SetText(d.name)
-    self.title2:SetText(("Fake user %d  (%d in the party)"):format(slot, partyN()))
+    self.title2:SetText(("Simulated player %d  (%d in the party)"):format(slot, partyN()))
     refreshAll()
     self:refreshTabs()
     loading = false
@@ -678,7 +716,7 @@ local function buildFakeWindow()
   return win
 end
 
--- open the fake users' window on one tab (not while a simulation runs)
+-- open the simulated players' window on one tab (not while a simulation runs)
 function Sim.showFakes(slot)
   if run then say("Stop the simulation before changing the party.", 1, 0.5, 0.5) return end
   if not frame then Sim.open() end
@@ -687,7 +725,7 @@ function Sim.showFakes(slot)
   frame.popup:showSlot(slot or frame.popup.slot or 1)
   frame.popup:Show()
 end
--- the f.u. boxes: n fake users in the party, and their window opens
+-- the SimP boxes: n simulated players in the party, and their window opens
 function Sim.pickCount(n)
   if run then say("Stop the simulation before changing the party.", 1, 0.5, 0.5) return end
   if not frame then Sim.open() end
@@ -706,9 +744,9 @@ end
 function Sim.open()
   if ns.isAlliance and ns.isAlliance() then return end
   if not frame then
-    local f = W.panel("CROX2SimFrame", "cro/x - combat simulator", 560, 440)
+    local f = W.panel("CROX2SimFrame", "cro/x - combat simulator", 640, 440)
     frame = f
-    f.scenario, f.speed = 1, 1
+    f.scenario, f.speed, f.enemy = 1, 1, "mix"
     -- the chat-style area
     local chat = CreateFrame("Frame", nil, f)
     chat:SetPoint("TOPLEFT", 12, -52)
@@ -737,16 +775,16 @@ function Sim.open()
     msgs:SetScript("OnMouseWheel", function(self, d) if d > 0 then self:ScrollUp() else self:ScrollDown() end end)
     f.msgs = msgs
 
-    -- fake users: how many are in the party; their own window opens with one tab each
-    local fl = W.text(f, "Fake Users:", "GameFontNormal")
+    -- simulated players: how many are in the party; their own window opens with one tab each
+    local fl = W.text(f, "Simulated Players:", "GameFontNormal")
     fl:SetPoint("BOTTOMLEFT", 14, 108)
     f.boxes = {}
     for i = 1, 4 do
-      local b = W.button(f, i .. " f.u.", 70, function() Sim.pickCount(i) end)
+      local b = W.button(f, i .. " SimP", 70, function() Sim.pickCount(i) end)
       if i == 1 then b:SetPoint("LEFT", fl, "RIGHT", 10, 0) else b:SetPoint("LEFT", f.boxes[i - 1], "RIGHT", 4, 0) end
       b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText(i .. (i == 1 and " fake user" or " fake users") .. " in the party", 1, 0.82, 0)
+        GameTooltip:SetText(i .. (i == 1 and " simulated player" or " simulated players") .. " in the party", 1, 0.82, 0)
         for j = 1, i do
           local d = fakes()[j]
           GameTooltip:AddLine(j .. ": " .. (d and fakeLabel(d) or "Random"), 1, 1, 1)
@@ -777,16 +815,25 @@ function Sim.open()
     end, function() return f.scenario end, function(v) f.scenario = v end)
     dd:SetPoint("BOTTOMLEFT", 2, 50)
     f.dd = dd
+    local ed = W.dropdown(f, 130, function()
+      local t = {{"mix", "Random mix"}}
+      for _, e in ipairs(ENEMIES) do t[#t + 1] = {e[1], e[2]} end
+      return t
+    end, function() return f.enemy end, function(v) f.enemy = v end)
+    ed:SetPoint("LEFT", dd, "RIGHT", -14, 0)
+    f.ed = ed
+    local el = W.hint(f, "Enemy")
+    el:SetPoint("BOTTOM", ed, "TOP", 0, -2)
     local sp = W.dropdown(f, 66, function()
       local t = {}
       for i, s in ipairs(SPEEDS) do t[i] = {s[1], s[2]} end
       return t
     end, function() return f.speed end, function(v) Sim.setSpeed(v) end)
-    sp:SetPoint("LEFT", dd, "RIGHT", -14, 0)
+    sp:SetPoint("LEFT", ed, "RIGHT", -14, 0)
     f.sp = sp
     local sl = W.hint(f, "Speed")
     sl:SetPoint("BOTTOM", sp, "TOP", 0, -2)
-    local go = W.button(f, "Start", 76, function() if run then Sim.stop() else Sim.start(f.scenario, f.speed) end end)
+    local go = W.button(f, "Start", 76, function() if run then Sim.stop() else Sim.start(f.scenario, f.speed, f.enemy) end end)
     go:SetPoint("LEFT", sp, "RIGHT", -6, 2)
     f.go = go
     local clear = W.button(f, "Clear", 64, function() msgs:Clear() end)
@@ -800,12 +847,13 @@ function Sim.open()
   end
   frame:Show()
   frame.dd.refresh()
+  frame.ed.refresh()
   frame.sp.refresh()
   refreshBoxes()
   if not frame.welcomed then
     frame.welcomed = true
     say("Pretend fights run through your character's real lines. Nothing here goes to chat.", 0.7, 0.7, 0.7)
-    say("The sim keeps its own clock: pick 2x, 4x, 6x or Instant. Click an f.u. box to set how many fake party members there are.", 0.7, 0.7, 0.7)
-    say("Pick a fight and press Start. Turn on testing mode in Options to keep the data.", 0.7, 0.7, 0.7)
+    say("The sim keeps its own clock: pick 2x, 4x, 6x or Instant. Click a SimP box to set how many simulated players are in the party.", 0.7, 0.7, 0.7)
+    say("Pick a fight and an enemy (or a random mix) and press Start. Turn on testing mode in Options to keep the data.", 0.7, 0.7, 0.7)
   end
 end
