@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.27 · 2026-11-15
+- splash stays open until closed (auto-close removed)
+
 ## 0.57-alpha2.26 · 2026-11-15
 - splash: flavor descriptors beside the choices and an example line under them
 

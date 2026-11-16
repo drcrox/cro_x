@@ -325,7 +325,7 @@ local function buildOptions(parent)
   y = y - 32
   head("Window")
   check("sound", "Window sounds", "The small clicks and chimes when cro/x windows open, close and change.")
-  check("splash", "Show the splash page at login", "A short welcome when you log in. It closes by itself after a few seconds.")
+  check("splash", "Show the splash page at login", "The setup page when you log in. It stays open until you close it with Done or the X.")
   local slider = W.slider(s, "Text scale", 0.8, 1.4, 0.05, function() return cdb().textScale or 1 end,
     function(v) cdb().textScale = v if ns.relayout then ns.relayout() end end, function(v) return ("%d%%"):format(v * 100 + 0.5) end)
   slider:SetPoint("TOPLEFT", 18, y - 12)
@@ -1365,7 +1365,6 @@ end
 -- Splash page at login
 ------------------------------------------------------------------------
 local splash
-local SPLASH_SECONDS = 12
 
 -- Shown once, right after setup is finished for the first time: look through the lines or add your own
 local nextStep
@@ -1396,7 +1395,7 @@ end
 ns.showNextStep = showNextStep
 
 -- The splash is also the setup: the character's five choices are dropdowns here. The first time (setup not
--- done yet) it stays open until the player is finished; after that it closes by itself unless it's in use.
+-- done yet) it stays open until the player is finished; after that it still stays open until the player closes it.
 local SPLASH_HINTS = {
   temperament = "How you talk in a fight",
   homeland = "Where you're from",
@@ -1617,12 +1616,6 @@ function ns.showSplash(onDone)
       self.who:SetText(("%s · %s %s"):format(ns.profile.name or "", ns.profile.race or "", cap(ns.profile.class or "")))
       if ns.refreshUI then ns.refreshUI() end
     end
-    splash:SetScript("OnUpdate", function(self, el)
-      local busy = not cdb().setupDone or self:IsMouseOver() or self.sizing or (DropDownList1 and DropDownList1:IsShown())
-      if busy then self.left = SPLASH_SECONDS return end
-      self.left = (self.left or SPLASH_SECONDS) - (el or 0)
-      if self.left <= 0 then self:Hide() end
-    end)
     splash:SetScript("OnHide", function(self)
       if CloseDropDownMenus then pcall(CloseDropDownMenus) end
       if not cdb().setupDone then
@@ -1638,7 +1631,6 @@ function ns.showSplash(onDone)
   end
   splash:refreshChoices()
   splash.show:SetChecked(cdb().splash ~= false)
-  splash.left = SPLASH_SECONDS
   splash.onDone = onDone
   splash:Show()
   if UIFrameFadeIn then pcall(UIFrameFadeIn, splash, 0.6, 0, 1) end

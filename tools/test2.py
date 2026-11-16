@@ -208,12 +208,14 @@ print("errors in chat:", [m for m in H.chat.values() if "error" in m.lower()])
 H.me.faction = "Horde"; ns.refreshProfile()
 ns.showSplash(); check("splash opens", G.CROX2SplashFrame._shown)
 check("no art picker", ns.openArtPicker is None and G.CROX2ArtFrame is None)
-lua.eval("function(f) return f._scripts.OnUpdate[1] end")(G.CROX2SplashFrame)(G.CROX2SplashFrame, 13)
+H.tick(60)
 check("splash carries the addon header and the title card", G.CROX2SplashFrame.title._text == "Combat Roleplay Options" and lua.eval('function(H) for _, f in ipairs(H.frames) do if f._text == "Combat Roleplay Options - cro/x" then return true end end return false end')(H), None)
 r = lua.eval('function() local f = CROX2SplashFrame f:SetSize(900, 700) local sc = f._scripts and f._scripts.OnSizeChanged if sc then sc[1](f) end return f:GetWidth() end')()
 check("splash can be resized", r == 900 and G.CROX2SplashFrame.IsShown is not None, r)
-G.CROX2SplashFrame.SetSize(G.CROX2SplashFrame, 560, 440)
-check("splash closes by itself", not G.CROX2SplashFrame._shown)
+G.CROX2SplashFrame.SetSize(G.CROX2SplashFrame, 700, 760)
+check("splash stays open until the player closes it", G.CROX2SplashFrame._shown)
+G.CROX2SplashFrame.Hide(G.CROX2SplashFrame)
+check("splash closes when told to", not G.CROX2SplashFrame._shown)
 r = lua.eval('''function(ns)
   ns.showSplash()
   local cb = CROX2SplashFrame and nil
@@ -316,8 +318,7 @@ r = lua.eval('''function(ns)
   ns.cdb.temperament = nil
   ns.showSplash()
   local f = CROX2SplashFrame
-  f._scripts.OnUpdate[1](f, 60)
-  local stays = f:IsShown()                      -- first run: no auto close
+  local stays = f:IsShown()                      -- it never closes by itself
   local items = ns.choiceItems("temperament")
   ns.cdb.temperament = items[2][1]
   f:refreshChoices()
