@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.60-beta.2 · 2026-11-15
+- fake users: the f.u. boxes set the party size, and the fake users get their own pop-out window with one tab each (changes kept as you make them)
+
 ## 0.60-beta.1 · 2026-11-15
 - yells are earned: stakes, a gap that follows the pace, one shout at a time in a party; text scale applies when you let go of the slider
 

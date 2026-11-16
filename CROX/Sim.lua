@@ -105,7 +105,21 @@ function Sim.resolve(def, taken)
 end
 
 local function fakes() ns.cdb.simFakes = ns.cdb.simFakes or {} return ns.cdb.simFakes end
-function Sim.fakeCount() local n = 0 for i = 1, 4 do if fakes()[i] then n = n + 1 end end return n end
+local FIELDS = {"race", "class", "spec", "depth", "pronouns", "temperament", "upbringing", "drive", "homeland", "pace"}
+local function blankDef() local d = {name = ""} for _, k in ipairs(FIELDS) do d[k] = "random" end return d end
+-- how many fake users are in the party: set by the f.u. boxes (saves from before the boxes counted: the slots filled in a row)
+local function partyN()
+  local n = ns.cdb.simFakeN
+  if n == nil then n = 0 while n < 4 and fakes()[n + 1] do n = n + 1 end end
+  return math.max(0, math.min(4, n))
+end
+function Sim.fakeCount() return partyN() end
+-- set the party to n fake users; the ones already built are kept (also when the party shrinks and grows again)
+function Sim.setCount(n)
+  n = math.max(0, math.min(4, math.floor(n or 0)))
+  ns.cdb.simFakeN = n
+  for i = 1, n do if not fakes()[i] then fakes()[i] = blankDef() end end
+end
 
 ------------------------------------------------------------------------
 -- The pretend party
@@ -428,16 +442,13 @@ function Sim.start(scenario, speed)
   actors, byName = {userActor}, {[userActor.name] = userActor}
   local taken = {[userActor.name] = true}
   local names = {}
-  for i = 1, 4 do
-    local d = fakes()[i]
-    if d then
-      d = Sim.resolve(d, taken)
-      taken[d.name] = true
-      local a = fakeActor(d)
-      actors[#actors + 1] = a
-      byName[a.name] = a
-      names[#names + 1] = ("%s (%s %s)"):format(a.name, d.race, cap(d.class))
-    end
+  for i = 1, partyN() do
+    local d = Sim.resolve(fakes()[i] or blankDef(), taken)
+    taken[d.name] = true
+    local a = fakeActor(d)
+    actors[#actors + 1] = a
+    byName[a.name] = a
+    names[#names + 1] = ("%s (%s %s)"):format(a.name, d.race, cap(d.class))
   end
   ns.simParty = #actors > 1 and actors or nil
   G.simResetParty()
@@ -484,54 +495,69 @@ end
 -- The window: chat area, controls, the f.u. boxes and the fake-user popup
 ------------------------------------------------------------------------
 local function fakeLabel(d)
-  return ("%s - %s %s"):format(d.name, d.race, cap(d.class))
+  local function v(x) return (x == nil or x == "random") and "random" or x end
+  local nm = (d.name and d.name ~= "") and d.name or "Random name"
+  return ("%s - %s %s"):format(nm, cap(v(d.race)), cap(v(d.class)))
 end
 
 local function refreshBoxes()
   if not frame then return end
+  local n = partyN()
   for i, b in ipairs(frame.boxes) do
-    local d = fakes()[i]
-    b:SetText(d and ("|cffffd100" .. i .. " f.u.|r") or (i .. " f.u."))
+    b:SetText(i <= n and ("|cffffd100" .. i .. " f.u.|r") or (i .. " f.u."))
   end
+  if frame.none then frame.none:SetText(n == 0 and "|cffffd100None|r" or "None") end
 end
 
-local function buildPopup(f)
-  local pop = CreateFrame("Frame", nil, f)
-  pop:SetSize(470, 318)
-  pop:SetPoint("CENTER", f, "CENTER", 0, 4)
-  pop:SetFrameLevel((f:GetFrameLevel() or 1) + 30)
-  pop:EnableMouse(true)
-  local bg = pop:CreateTexture(nil, "BACKGROUND")
-  bg:SetAllPoints()
-  bg:SetColorTexture(0.04, 0.03, 0.02, 0.97)
-  for _, e in ipairs({{"TOPLEFT", "TOPRIGHT", nil, 2}, {"BOTTOMLEFT", "BOTTOMRIGHT", nil, 2}, {"TOPLEFT", "BOTTOMLEFT", 2}, {"TOPRIGHT", "BOTTOMRIGHT", 2}}) do
-    local t = pop:CreateTexture(nil, "BORDER")
-    t:SetColorTexture(0.72, 0.56, 0.16, 1)
-    t:SetPoint(e[1], pop, e[1])
-    t:SetPoint(e[2], pop, e[2])
-    if e[3] then t:SetWidth(e[3]) else t:SetHeight(e[4]) end
-  end
-  pop.title = W.heading(pop, "")
-  pop.title:SetPoint("TOPLEFT", 14, -12)
-  local sub = W.hint(pop, "Pick anything, or leave it on Random. Only combinations the game allows are offered.")
-  sub:SetPoint("TOPLEFT", 14, -30)
+-- The fake users' own window, a separate pop-out beside the simulator: one tab per fake user in the party, each tab
+-- holding that character's choices. Changes are kept as you make them. "Random" is kept as Random and rolled fresh
+-- each run, always inside the game's race and class combinations.
+local function buildFakeWindow()
+  local win = W.panel("CROX2SimFakesFrame", "cro/x - fake users", 500, 342)
+  win:ClearAllPoints()
+  win:SetPoint("TOPLEFT", frame, "TOPRIGHT", 4, 0)
   local d = {}
-  pop.def = d
+  win.def = d
+  local loading = false
 
   local dds = {}
   local function refreshAll() for _, dd in ipairs(dds) do dd.refresh() end end
+  local function save()
+    if loading or not win.slot then return end
+    local c = {}
+    for k, v in pairs(d) do c[k] = v end
+    c.name = d.name or ""
+    fakes()[win.slot] = c
+    if frame and frame.boxes then refreshBoxes() end
+  end
+  win.save = save
+
+  -- tabs: f.u. 1 .. f.u. 4, only as many as the party has
+  win.tabs = {}
+  for i = 1, 4 do
+    local b = W.button(win, "f.u. " .. i, 84, function() win:showSlot(i) end)
+    if i == 1 then b:SetPoint("TOPLEFT", 12, -34) else b:SetPoint("LEFT", win.tabs[i - 1], "RIGHT", 4, 0) end
+    win.tabs[i] = b
+  end
+  win.title2 = W.heading(win, "")
+  win.title2:SetPoint("TOPLEFT", 14, -64)
+  local sub = W.hint(win, "Leave anything on Random and it is rolled fresh every run. Only combinations the game allows are offered.")
+  sub:SetPoint("TOPLEFT", 14, -82)
+  sub:SetWidth(470)
+
   local function label(text, x, y)
-    local l = W.text(pop, text, "GameFontNormalSmall")
+    local l = W.text(win, text, "GameFontNormalSmall")
     l:SetPoint("TOPLEFT", x, y - 6)
     l:SetWidth(78)
     return l
   end
   local function dropdown(key, text, x, y, items, onSet)
     label(text, x, y)
-    local dd = W.dropdown(pop, 112, items, function() return d[key] end, function(v)
+    local dd = W.dropdown(win, 112, items, function() return d[key] end, function(v)
       d[key] = v
       if onSet then onSet(v) end
       refreshAll()
+      save()
     end)
     dd:SetPoint("TOPLEFT", x + 80, y + 2)
     dds[#dds + 1] = dd
@@ -549,16 +575,15 @@ local function buildPopup(f)
     return listWith(out)
   end
 
-  -- name
-  label("Name", 14, -52)
-  local nameBox = W.edit(pop, 130, 20)
-  nameBox:SetPoint("TOPLEFT", 96, -52)
-  nameBox:SetScript("OnTextChanged", function(self) d.name = self:GetText() end)
-  local nh = W.hint(pop, "(blank = a random name)")
+  label("Name", 14, -106)
+  local nameBox = W.edit(win, 130, 20)
+  nameBox:SetPoint("TOPLEFT", 96, -106)
+  nameBox:SetScript("OnTextChanged", function(self) d.name = self:GetText() save() end)
+  local nh = W.hint(win, "(blank = a random name)")
   nh:SetPoint("LEFT", nameBox, "RIGHT", 8, 0)
-  pop.nameBox = nameBox
+  win.nameBox = nameBox
 
-  local y0 = -84
+  local y0 = -136
   local H = 34
   dropdown("race", "Race", 14, y0, function() return keys(Sim.RACES) end, function(v)
     if v ~= "random" and d.class ~= "random" and not has(Sim.RACE_CLASSES[v], d.class) then d.class = "random" d.spec = "random" end
@@ -582,67 +607,85 @@ local function buildPopup(f)
   end)
   dropdown("pronouns", "Pronouns", 14, y0 - H * 4, function() return listWith(PRONOUNS) end)
 
-  dropdown("temperament", "Temperament", 236, y0, function() return keys(ns.TEMPERAMENTS) end)
-  dropdown("upbringing", "Origin", 236, y0 - H, function() return keys(ns.UPBRINGINGS) end)
-  dropdown("drive", "Motivation", 236, y0 - H * 2, function() return keys(ns.DRIVES) end)
-  dropdown("homeland", "Homeland", 236, y0 - H * 3, function()
+  dropdown("temperament", "Temperament", 250, y0, function() return keys(ns.TEMPERAMENTS) end)
+  dropdown("upbringing", "Origin", 250, y0 - H, function() return keys(ns.UPBRINGINGS) end)
+  dropdown("drive", "Motivation", 250, y0 - H * 2, function() return keys(ns.DRIVES) end)
+  dropdown("homeland", "Homeland", 250, y0 - H * 3, function()
     return listWith(Sim.homelandsFor(d.race ~= "random" and d.race or nil))
   end)
-  dropdown("pace", "Pace in a group", 236, y0 - H * 4, function()
+  dropdown("pace", "Pace in a group", 250, y0 - H * 4, function()
     local out = {RANDOM}
     for i = 1, 7 do out[#out + 1] = {i, ns.CHATTY[i].name} end
     return out
   end)
 
-  function pop:load(slot)
-    self.slot = slot
-    local cur = fakes()[slot]
-    for k in pairs(d) do d[k] = nil end
-    for _, k in ipairs({"race", "class", "spec", "depth", "pronouns", "temperament", "upbringing", "drive", "homeland", "pace"}) do d[k] = "random" end
-    if cur then for k, v in pairs(cur) do d[k] = v end end
-    d.name = cur and cur.name or ""
-    nameBox:SetText(d.name)
-    self.title:SetText(("Fake user %d (f.u. %d)"):format(slot, slot))
-    refreshAll()
+  function win:refreshTabs()
+    local n = partyN()
+    for i, b in ipairs(self.tabs) do
+      b:SetShown(i <= n)
+      b:SetText(i == self.slot and ("|cffffd100f.u. " .. i .. "|r") or ("f.u. " .. i))
+      if i == self.slot then b:LockHighlight() else b:UnlockHighlight() end
+    end
   end
-  function pop:randomizeAll()
-    for _, k in ipairs({"race", "class", "spec", "depth", "pronouns", "temperament", "upbringing", "drive", "homeland", "pace"}) do d[k] = "random" end
-    d.name = ""
+  -- show one fake user's tab (what was on the last tab was already kept as it was changed)
+  function win:showSlot(slot)
+    slot = math.max(1, math.min(slot or 1, math.max(1, partyN())))
+    self.slot = slot
+    loading = true
+    local cur = fakes()[slot] or blankDef()
+    for k in pairs(d) do d[k] = nil end
+    for _, k in ipairs(FIELDS) do d[k] = "random" end
+    for k, v in pairs(cur) do d[k] = v end
+    d.name = cur.name or ""
+    nameBox:SetText(d.name)
+    self.title2:SetText(("Fake user %d  (%d in the party)"):format(slot, partyN()))
+    refreshAll()
+    self:refreshTabs()
+    loading = false
+  end
+  local function rollOne(def) for _, k in ipairs(FIELDS) do def[k] = "random" end def.name = "" end
+  local rnd = W.button(win, "Randomize this one", 140, function()
+    rollOne(d)
     nameBox:SetText("")
     refreshAll()
-  end
-  local function others()
-    local taken = {[ns.profile and ns.profile.name or ""] = true}
-    for i = 1, 4 do if i ~= pop.slot and fakes()[i] then taken[fakes()[i].name] = true end end
-    return taken
-  end
-  local rnd = W.button(pop, "Randomize all", 110, function() pop:randomizeAll() end)
+    save()
+  end)
   rnd:SetPoint("BOTTOMLEFT", 14, 14)
-  local done = W.button(pop, "Done", 80, function()
-    fakes()[pop.slot] = Sim.resolve(d, others())
-    pop:Hide()
-    refreshBoxes()
-    if frame and frame.boxTip then frame.boxTip() end
-  end)
-  done:SetPoint("BOTTOMRIGHT", -14, 14)
-  local cancel = W.button(pop, "Cancel", 80, function() pop:Hide() end)
-  cancel:SetPoint("RIGHT", done, "LEFT", -6, 0)
-  local remove = W.button(pop, "Remove", 80, function()
-    fakes()[pop.slot] = nil
-    pop:Hide()
+  local rndAll = W.button(win, "Randomize all", 110, function()
+    for i = 1, partyN() do fakes()[i] = blankDef() end
+    win:showSlot(win.slot)
     refreshBoxes()
   end)
-  remove:SetPoint("RIGHT", cancel, "LEFT", -6, 0)
-  pop:Hide()
-  return pop
+  rndAll:SetPoint("LEFT", rnd, "RIGHT", 6, 0)
+  local close = W.button(win, "Close", 80, function() win:Hide() end)
+  close:SetPoint("BOTTOMRIGHT", -14, 14)
+  win:Hide()
+  return win
 end
 
+-- open the fake users' window on one tab (not while a simulation runs)
+function Sim.showFakes(slot)
+  if run then say("Stop the simulation before changing the party.", 1, 0.5, 0.5) return end
+  if not frame then Sim.open() end
+  if partyN() == 0 then if frame.popup then frame.popup:Hide() end return end
+  if not frame.popup then frame.popup = buildFakeWindow() end
+  frame.popup:showSlot(slot or frame.popup.slot or 1)
+  frame.popup:Show()
+end
+-- the f.u. boxes: n fake users in the party, and their window opens
+function Sim.pickCount(n)
+  if run then say("Stop the simulation before changing the party.", 1, 0.5, 0.5) return end
+  if not frame then Sim.open() end
+  Sim.setCount(n)
+  refreshBoxes()
+  Sim.showFakes()
+end
 function Sim.editFake(slot)
   if run then say("Stop the simulation before changing the party.", 1, 0.5, 0.5) return end
   if not frame then Sim.open() end
-  if not frame.popup then frame.popup = buildPopup(frame) end
-  frame.popup:load(slot)
-  frame.popup:Show()
+  slot = slot or 1
+  if slot > partyN() then Sim.setCount(slot) refreshBoxes() end
+  Sim.showFakes(slot)
 end
 
 function Sim.open()
@@ -679,30 +722,37 @@ function Sim.open()
     msgs:SetScript("OnMouseWheel", function(self, d) if d > 0 then self:ScrollUp() else self:ScrollDown() end end)
     f.msgs = msgs
 
-    -- fake users: four boxes, each opens the popup to build that character
+    -- fake users: how many are in the party; their own window opens with one tab each
     local fl = W.text(f, "Fake Users:", "GameFontNormal")
     fl:SetPoint("BOTTOMLEFT", 14, 108)
     f.boxes = {}
     for i = 1, 4 do
-      local b = W.button(f, i .. " f.u.", 80, function() Sim.editFake(i) end)
-      if i == 1 then b:SetPoint("LEFT", fl, "RIGHT", 10, 0) else b:SetPoint("LEFT", f.boxes[i - 1], "RIGHT", 6, 0) end
+      local b = W.button(f, i .. " f.u.", 70, function() Sim.pickCount(i) end)
+      if i == 1 then b:SetPoint("LEFT", fl, "RIGHT", 10, 0) else b:SetPoint("LEFT", f.boxes[i - 1], "RIGHT", 4, 0) end
       b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        local d = fakes()[i]
-        GameTooltip:SetText(i .. " f.u.", 1, 0.82, 0)
-        if d then
-          GameTooltip:AddLine(fakeLabel(d), 1, 1, 1)
-          GameTooltip:AddLine(("%s, %s, %s. %s pace in a group."):format(cap(d.temperament), cap(d.upbringing), cap(d.drive),
-            ns.CHATTY[d.pace] and ns.CHATTY[d.pace].name or "?"), 0.8, 0.8, 0.8, true)
-          GameTooltip:AddLine("Click to change or remove.", 0.6, 0.6, 0.6)
-        else
-          GameTooltip:AddLine("Click to build a fake party member. The sim plays them as a full cro/x character.", 1, 1, 1, true)
+        GameTooltip:SetText(i .. (i == 1 and " fake user" or " fake users") .. " in the party", 1, 0.82, 0)
+        for j = 1, i do
+          local d = fakes()[j]
+          GameTooltip:AddLine(j .. ": " .. (d and fakeLabel(d) or "Random"), 1, 1, 1)
         end
+        GameTooltip:AddLine("Click to set the party size and open their window. The sim plays each as a full cro/x character.", 0.6, 0.6, 0.6, true)
         GameTooltip:Show()
       end)
       b:SetScript("OnLeave", function() GameTooltip:Hide() end)
       f.boxes[i] = b
     end
+    local none = W.button(f, "None", 56, function()
+      if run then say("Stop the simulation before changing the party.", 1, 0.5, 0.5) return end
+      Sim.setCount(0)
+      refreshBoxes()
+      if f.popup then f.popup:Hide() end
+    end)
+    none:SetPoint("LEFT", f.boxes[4], "RIGHT", 4, 0)
+    f.none = none
+    local edit = W.button(f, "Edit...", 60, function() Sim.showFakes() end)
+    edit:SetPoint("LEFT", none, "RIGHT", 4, 0)
+    f.edit = edit
 
     -- scenario, speed, start
     local dd = W.dropdown(f, 170, function()
@@ -740,7 +790,7 @@ function Sim.open()
   if not frame.welcomed then
     frame.welcomed = true
     say("Pretend fights run through your character's real lines. Nothing here goes to chat.", 0.7, 0.7, 0.7)
-    say("The sim keeps its own clock: pick 2x, 4x, 6x or Instant. Click an f.u. box to add a fake party member.", 0.7, 0.7, 0.7)
+    say("The sim keeps its own clock: pick 2x, 4x, 6x or Instant. Click an f.u. box to set how many fake party members there are.", 0.7, 0.7, 0.7)
     say("Pick a fight and press Start. Turn on testing mode in Options to keep the data.", 0.7, 0.7, 0.7)
   end
 end

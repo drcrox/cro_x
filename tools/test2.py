@@ -785,39 +785,50 @@ end''')(ns, H)
 r = dict(r)
 check("2x advances half a pretend second a tick, 6x one and a half", abs(r["adv2"] - 0.5) < 0.01 and abs(r["adv6"] - 1.5) < 0.01, r)
 
-# the f.u. boxes and the popup
+# the f.u. boxes set the party size; their own window has one tab per fake user
 r = lua.eval('''function(ns, H)
   local S = ns.Sim
   local out = {}
-  ns.cdb.simFakes = {}
+  ns.cdb.simFakes = {} ns.cdb.simFakeN = nil
   S.open()
   local f = CROX2SimFrame
   out.boxes = #f.boxes
-  out.label = f.boxes[2]._text
-  f.boxes[2]:Click()
-  out.popup = f.popup ~= nil and f.popup._shown == true
-  f.popup.def.race = "Tauren"
-  f.popup.def.class = "ROGUE"
-  f.popup.def.name = "Bahru"
-  -- find the Done button by its text
-  local function find(frame)
-    for _, ch in ipairs(H.frames) do
-      if ch._parent == frame and ch._text == "Done" then return ch end
-    end
-  end
-  local done = find(f.popup)
-  out.hasDone = done ~= nil
-  if done then done:Click() end
-  local d = ns.cdb.simFakes[2]
-  out.saved = d ~= nil and d.name == "Bahru" and d.race == "Tauren" and d.class ~= "ROGUE"
-  out.closed = f.popup._shown ~= true
-  out.boxText = f.boxes[2]._text
-  ns.cdb.simFakes = {}
+  out.zero = S.fakeCount() == 0
+  f.boxes[3]:Click()                                   -- "3 f.u." = three fake users in the party
+  out.count = S.fakeCount()
+  local w = f.popup
+  out.window = w ~= nil and w._shown == true and w._parent == UIParent       -- its own window, not inside the sim's
+  local tabsShown = 0
+  for _, b in ipairs(w.tabs) do if b._shown then tabsShown = tabsShown + 1 end end
+  out.tabs = tabsShown
+  out.hasNoDone = true
+  for _, ch in ipairs(H.frames) do if ch._parent == w and (ch._text == "Done" or ch._text == "Cancel") then out.hasNoDone = false end end
+  -- edit tab 1, move to tab 2: tab 1 was kept as it was changed
+  w.def.race = "Tauren" w.def.class = "ROGUE"
+  w.nameBox:SetText("Bahru")
+  w.nameBox._scripts.OnTextChanged[1](w.nameBox)       -- typing the name (saves with the rest)
+  w.tabs[2]:Click()
+  out.onTab2 = w.slot == 2
+  out.tab2Blank = w.def.race == "random"
+  w.tabs[1]:Click()
+  out.kept = w.def.name == "Bahru" and w.def.race == "Tauren"
+  -- a random fake keeps "Random" in storage and is made legal when the party is built
+  local d = S.resolve(ns.cdb.simFakes[1], {})
+  out.legal = d.race == "Tauren" and d.class ~= "ROGUE"
+  f.boxes[2]:Click()                                   -- shrink to two: tab 3 goes, its data stays
+  out.two = S.fakeCount() == 2 and w.tabs[3]._shown ~= true and ns.cdb.simFakes[3] ~= nil
+  f.boxes[4]:Click()
+  out.four = S.fakeCount() == 4
+  f.none:Click()
+  out.none = S.fakeCount() == 0 and w._shown ~= true
+  ns.cdb.simFakes = {} ns.cdb.simFakeN = nil
   return out
 end''')(ns, H)
 r = dict(r)
-check("four f.u. boxes, the one clicked opens the popup", r["boxes"] == 4 and r["popup"], r)
-check("Done saves a legal character and closes the popup", r["hasDone"] and r["saved"] and r["closed"], r)
+check("four f.u. boxes pick how many fake users are in the party", r["boxes"] == 4 and r["zero"] and r["count"] == 3, r)
+check("the fake users have their own window with one tab each", r["window"] and r["tabs"] == 3 and r["hasNoDone"], r)
+check("a tab keeps its fake user's choices and stays legal", r["onTab2"] and r["tab2Blank"] and r["kept"] and r["legal"], r)
+check("the party can shrink, grow and be cleared", r["two"] and r["four"] and r["none"], r)
 
 # --- Setup page: Character tags tabs, with a box on what the character has
 r = lua.eval('''function(ns)
