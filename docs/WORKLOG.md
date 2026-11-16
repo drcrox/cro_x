@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.47 · 2026-11-15
+- fix: window layout ran before the page list existed (error on opening)
+
 ## 0.57-alpha2.46 · 2026-11-15
 - simulator: virtual clock, 2x-Instant, fake users; character tags tabs; origin/motivation; poster on every page; login switch bottom left
 

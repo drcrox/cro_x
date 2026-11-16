@@ -1647,7 +1647,7 @@ local function showSection(key)
 end
 
 local function relayout()
-  if not main then return end
+  if not main or not listFrame or not scrollFrame or not sections then return end    -- the window is still being built
   local fw, fh = main:GetWidth(), main:GetHeight()
   local auto = math.max(0.85, math.min(1.15, fw / BASE_W))
   local scale = auto * (cdb().textScale or 1)
