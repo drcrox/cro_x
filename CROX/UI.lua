@@ -325,7 +325,7 @@ local function buildHome(parent)
   s.chattyDD, s.chattyHint = chattyDD, chattyHint
   local raidDD, _, raidHint = speakRow(2, "In a group", "", function() return ns.chattyItems(true) end, function() return cdb().raidChatty or 3 end,
     function(v) cdb().raidChatty = v s:refreshChoices() end,
-    "How talkative you are whenever you are in a party or a raid. The group shares one pace, set by its loudest member. Windbag and Deafening are only here.")
+    "How talkative you are whenever you are in a party or a raid. The group shares one pace, set by its loudest member. Windbag and Deafening are only here, and they can fill other people's chat, so please be considerate.")
   s.raidDD, s.raidHint = raidDD, raidHint
   local askL, askH
   s.askDD, askL, askH = speakRow(3, "Ask for help", "", CR_LEVELS, function() return cdb().crAsk or 4 end,
@@ -358,6 +358,17 @@ local function buildHome(parent)
     c._index = i
   end
   -- the troll row only exists for a troll; everything below moves up when it isn't there
+  -- a note for the two loudest levels, so nobody picks them without thinking of the people around them
+  local warn = W.text(grp2, "", "GameFontNormalSmall")
+  warn:SetTextColor(1, 0.55, 0.2)
+  warn:SetWordWrap(true)
+  warn:SetJustifyH("LEFT")
+  warn:SetJustifyV("TOP")
+  warn:SetWidth(430)
+  warn:SetHeight(54)
+  s.paceWarn = warn
+  local PACE_WARNING = "Please be considerate of how this addon could affect other people's game when you choose how often you speak. "
+    .. "At this level your character talks a lot, and in a group everyone else's chat fills up with it."
   function s:layoutSpeak()
     local troll = ns.isTroll()
     trollDD:SetShown(troll) trollL:SetShown(troll) trollH:SetShown(troll)
@@ -369,6 +380,12 @@ local function buildHome(parent)
       c:SetChecked(cdb()[key] == true)
     end
     local gh = top + 3 * 26 + 4
+    local loud = (cdb().raidChatty or 3) >= 6 or (cdb().chatty or 3) >= 6
+    warn:ClearAllPoints()
+    warn:SetPoint("TOPLEFT", 0, -gh - 2)
+    warn:SetText(loud and PACE_WARNING or "")
+    warn:SetShown(loud)
+    if loud then gh = gh + 62 end
     grp2:SetHeight(gh)
     plate2:SetHeight(34 + gh + 10)
   end
@@ -578,6 +595,7 @@ local function buildHome(parent)
     self.who:SetText(("%s%s|r  |cffbbbbbb· %s %s|r"):format(hex, nm, pf.race or "", cap((pf.class or ""):lower())))
     self:refreshTags()
     self.show:SetChecked(c.splash ~= false)
+    if ns.relayout then ns.relayout() end      -- the page grows by a note at the loudest levels
   end
   function s:refresh() self:refreshChoices() end
   function s:layout(w)

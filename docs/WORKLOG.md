@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.60-beta.7 · 2026-11-15
+- note about other people's game at Windbag and Deafening
+
 ## 0.60-beta.6 · 2026-11-15
 - pace levels renamed: Hushed, Reserved, Social, Talkative, Chatty, Windbag, Deafening
 

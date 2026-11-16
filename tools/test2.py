@@ -924,6 +924,26 @@ check("the name sits in its own box, in the class colour", r["boxed"] and r["pla
 check("the name shows first and last from Total RP 3 when it is there", r["fullName"], r)
 check("the button says Another One and the flavor text hangs under its dropdown", r["another"] and r["under"], r)
 
+# the two loudest levels carry a note about other people's game
+r = lua.eval('''function(ns, H)
+  local out = {}
+  ns.openSection("home")
+  local s = ns._sections.home
+  local saved = ns.cdb.raidChatty
+  ns.cdb.raidChatty = 3 s:refreshChoices()
+  out.quietHidden = s.paceWarn._shown ~= true
+  ns.cdb.raidChatty = 5 s:refreshChoices()
+  out.chattyHidden = s.paceWarn._shown ~= true
+  ns.cdb.raidChatty = 6 s:refreshChoices()
+  out.windbag = s.paceWarn._shown == true and (s.paceWarn:GetText() or ""):find("considerate", 1, true) ~= nil
+  ns.cdb.raidChatty = 7 s:refreshChoices()
+  out.deafening = s.paceWarn._shown == true
+  ns.cdb.raidChatty = saved s:refreshChoices()
+  return out
+end''')(ns, H)
+r = dict(r)
+check("the note about other people's game shows only at the two loudest levels", r["quietHidden"] and r["chattyHidden"] and r["windbag"] and r["deafening"], r)
+
 # --- Setup page: Character tags tabs, with a box on what the character has
 r = lua.eval('''function(ns)
   ns.openSection("home")

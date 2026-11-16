@@ -306,3 +306,6 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 
 ## Pace level names (0.60-beta.6)
 - The seven levels are now Hushed (0-1 lines a minute), Reserved (1-3), **Social (2-4, the default)**, Talkative (3-5), Chatty (4-6), Windbag (5-7) and Deafening (6-7). On your own offers the first five; In a group offers all seven (Windbag and Deafening are group only). Rates and multipliers are unchanged; only the names moved.
+
+## A note at the two loudest levels (0.60-beta.7)
+- Choosing Windbag or Deafening shows an orange note under the Setup page's speaking choices: "Please be considerate of how this addon could affect other people's game when you choose how often you speak. At this level your character talks a lot, and in a group everyone else's chat fills up with it." It hides again at any quieter level, and the In a group tooltip says the same in short.
