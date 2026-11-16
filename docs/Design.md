@@ -309,3 +309,6 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 
 ## A note at the two loudest levels (0.60-beta.7)
 - Choosing Windbag or Deafening shows an orange note under the Setup page's speaking choices: "Please be considerate of how this addon could affect other people's game when you choose how often you speak. At this level your character talks a lot, and in a group everyone else's chat fills up with it." It hides again at any quieter level, and the In a group tooltip says the same in short.
+
+## Colons on the Setup labels (0.60-beta.8)
+- Every dropdown label on the Setup page now ends in a colon: Temperament:, Homeland:, Origin:, Motivation:, Pronouns:, On your own:, In a group:, Ask for help:, Answer a call:, Troll voice:. Tooltip titles stay without it. Checkboxes and tab names are unchanged.

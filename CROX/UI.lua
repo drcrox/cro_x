@@ -261,7 +261,7 @@ local function buildHome(parent)
   for i, ch in ipairs(CHOICES) do
     local kind = ch[1]
     local y = -(i - 1) * ROW
-    local label = W.text(grp, ch[2], "GameFontNormal")
+    local label = W.text(grp, ch[2] .. ":", "GameFontNormal")
     label:SetPoint("TOPLEFT", 0, y - 6)
     local dd = W.dropdown(grp, 170, function() return choiceItems(kind) end, function() return cdb()[kind] end,
       function(v) cdb()[kind] = v s:refreshChoices(kind) end)
@@ -310,7 +310,7 @@ local function buildHome(parent)
   grp2:SetPoint("TOP", plate2, "TOP", 0, -34)
   local CR_LEVELS = function() return {{1, "Rarely"}, {2, "Sometimes"}, {3, "Often"}, {4, "Always"}} end
   local function speakRow(i, text, hint, items, get, set, tip)
-    local label = W.text(grp2, text, "GameFontNormal")
+    local label = W.text(grp2, text .. ":", "GameFontNormal")
     label:SetPoint("TOPLEFT", 0, -(i - 1) * 34 - 6)
     local dd = W.dropdown(grp2, 170, items, get, set)
     dd:SetPoint("TOPLEFT", 100, -(i - 1) * 34 + 2)
