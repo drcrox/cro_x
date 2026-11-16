@@ -15,4 +15,5 @@ Widgets.lua
 Group.lua
 Log.lua
 Bug.lua
+Sim.lua
 UI.lua

@@ -475,6 +475,16 @@ local function buildOptions(parent)
   head("Log")
   check("logging", "Keep a session log", "Records what was said and why lines stayed quiet, on this computer only. Used by /x flag and /x export.")
   check("includeOwn", "Include my own lines in exports", "Off: your own lines show as \"one of your own lines\" in /x export.")
+  head("Testing")
+  check("testing", "Testing mode (collects extra data)", "Off by default. While on, cro/x keeps more detail about every fight (what it said, why it stayed quiet, the pace and speech budget at the time), on this computer only. Copy it from Copy test data and paste it where the testers gather. Nothing is sent for you.",
+    function(on) p(on and "testing mode is ON. Play as normal, then /x testdata to copy what it collected." or "testing mode is off.") end)
+  local dataBtn = W.button(s, "Copy test data...", 150, function() ns.Log.openTestData() end)
+  dataBtn:SetPoint("TOPLEFT", 12, y - 2)
+  W.tooltip(dataBtn, "Copy test data", "Opens the collected testing data with instructions on how to copy and send it. Same as /x testdata.")
+  local simBtn = W.button(s, "Combat simulator...", 150, function() ns.Sim.open() end)
+  simBtn:SetPoint("LEFT", dataBtn, "RIGHT", 8, 0)
+  W.tooltip(simBtn, "Combat simulator", "A small chat-style window that plays pretend fights through your character's real lines. Same as /x sim.")
+  y = y - 32
   head("Beta testing")
   local bugBtn = W.button(s, "Report a problem...", 150, function() ns.Bug.open() end)
   bugBtn:SetPoint("TOPLEFT", 12, y - 2)
@@ -1477,7 +1487,7 @@ end
 local function help()
   p("/x - open the window · /x flag - review a fight · /x export - copy your log · /x setup - redo setup")
   p("/x reset - start over · /x probe - what this client offers")
-  p("/x bug - report a problem · /x test - why was that press quiet?")
+  p("/x bug - report a problem · /x test - why was that press quiet? · /x testdata - copy test data · /x sim - combat simulator")
   p("/x on · /x off · /x help")
 end
 
@@ -1495,6 +1505,8 @@ SlashCmdList["CROX"] = function(msg)
   elseif msg == "reset" then ns.confirmReset()
   elseif msg == "probe" then ns.Bug.probe()
   elseif msg == "bug" or msg == "report" then ns.Bug.open()
+  elseif msg == "testdata" then ns.Log.openTestData()
+  elseif msg == "sim" then ns.Sim.open()
   elseif msg == "test" then ns.Bug.test()
   elseif msg == "on" then ns.cdb.on = true p("on.")
   elseif msg == "off" then ns.cdb.on = false p("off.")
@@ -1568,6 +1580,7 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
   pcall(ns.updateMinimap)
   if not ns.cdb or ns.isAlliance() or not ns.cdb.on then return end
+  if ns.cdb.testing then p("testing mode is ON (collecting extra data). /x testdata to copy it, /x sim for the combat simulator.") end
   -- first run always opens it (that's where the choices are made); after that, only if "Open to this page at login" is on
   if ns.cdb.splash or not ns.cdb.setupDone then
     C_Timer.After(1.5, function() pcall(ns.showSplash) end)

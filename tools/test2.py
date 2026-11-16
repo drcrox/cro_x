@@ -478,3 +478,36 @@ r = lua.eval('''function(ns)
 end''')(ns)
 check("budget: a fresh character may speak once", r["first"] is None, r["first"])
 check("budget: spent budget holds lines back, big moments still go", r["spent"] == "pace: speech budget is spent" and r["big"] is None, (r["spent"], r["big"]))
+
+# --- testing mode and the combat simulator (0.57-alpha2.34)
+r = lua.eval('''function(ns, H)
+  local out = {}
+  out.defaultOff = ns.cdb.testing == false
+  ns.cdb.testing = true ns.cdb.on = true ns.cdb.turns = false ns.cdb.cr = false
+  ns.Log.init()
+  local fc = 0
+  ns.Sim.open()
+  out.opened = CROX2SimFrame ~= nil
+  local sentBefore = #H.sent
+  ns.Sim.start(3)
+  out.running = ns.Sim.running()
+  local said = 0
+  for i = 1, 1400 do H.tick(0.5) ns.Sim.tick() end        -- 700 pretend seconds: five pulls and the rests
+  out.stoppedAlone = not ns.Sim.running()
+  out.nothingSent = #H.sent == sentBefore                  -- the simulator never talks in real chat
+  out.noSimLeft = ns.sim == nil and ns.simOut == nil and ns.inCombat == false
+  local rep = ns.Log.testReport()
+  out.rep = rep
+  out.fights = #ns.Log.testFights()
+  ns.Log.clearTest()
+  out.cleared = #ns.Log.testFights() == 0
+  ns.cdb.testing = false ns.cdb.turns = true ns.cdb.cr = true
+  return out
+end''')(ns, H)
+check("testing mode is off by default", r["defaultOff"])
+check("the simulator opens and runs", r["opened"] and r["running"])
+check("the simulator stops by itself and cleans up", r["stoppedAlone"] and r["noSimLeft"])
+check("the simulator never sends real chat", r["nothingSent"])
+check("a pretend fight is captured as test data", r["fights"] >= 4, r["fights"])
+check("the test report has a summary and simulated fights", "SUMMARY" in r["rep"] and "(SIMULATED)" in r["rep"] and "pace" in r["rep"], r["rep"][:300])
+check("test data can be cleared", r["cleared"])

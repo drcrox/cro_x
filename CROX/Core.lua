@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.33"
+local BUILD = "0.57-alpha2.34"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -51,7 +51,7 @@ local DRIVES = {"honor", "coin", "vengeance", "faith", "glory", "duty"}
 ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
-  profLines = true,
+  profLines = true, testing = false,
   on = true, chatty = 3, raidChatty = 2, chattyScale = 2, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
@@ -272,6 +272,7 @@ ns.pct = pct
 local function unitIs(a, b) return bool(safe(UnitIsUnit, a, b)) end
 
 local function targetFacts()
+  if ns.sim then return ns.sim.tgt end        -- the combat simulator supplies a pretend target
   local t = {}
   t.exists = bool(safe(UnitExists, "target")) or false
   if not t.exists then return t end
@@ -321,8 +322,8 @@ end
 local function makeCtx(ability, info, item)
   local ctx = {ability = ability, info = info or {}, item = item}
   ctx.tgt = targetFacts()
-  ctx.hp = pct("player")
-  ctx.hurt = (now() - hurtAt) < 3
+  ctx.hp = ns.sim and ns.sim.hp or pct("player")
+  ctx.hurt = ns.sim and ns.sim.hurt or (now() - hurtAt) < 3
   ctx.stealth = stealthBefore
   ctx.group = bool(safe(IsInGroup)) or false
   ctx.raid = bool(safe(IsInRaid)) or false
@@ -709,6 +710,7 @@ end
 ns.paceBlock = paceBlock
 
 local function send(channel, text)
+  if ns.simOut then ns.simOut(channel, text) return true end     -- the simulator shows lines in its own window
   local ok, err = pcall(SendChatMessage, text, channel)
   return ok, err
 end
@@ -980,7 +982,9 @@ local function chanceOK(moment, big)
   -- right after a line the next one is less likely; in a fight, a long quiet stretch makes one likelier
   local refr = 0.2 + 0.8 * math.min(1, (t - lastSpoke) / REFRACTORY)
   local boost = ns.inCombat and (1 + math.min(since, SILENCE_FULL) / 20) or 1
-  return math.random() * 100 < base * mult * refr * boost
+  local pct_ = base * mult * refr * boost
+  ns._lastChance = pct_
+  return math.random() * 100 < pct_
 end
 
 local function quiet(ctx, moment, why)
@@ -1340,6 +1344,42 @@ function ns.sample(kind)
   end)
   return text
 end
+
+------------------------------------------------------------------------
+-- Combat simulator hooks (UI/Sim.lua drives these; nothing here touches the game's own combat)
+------------------------------------------------------------------------
+local SIM_SLOT = 99999
+function ns.simPress(name)
+  slotSpell[SIM_SLOT] = {kind = "spell", name = name}
+  before[SIM_SLOT] = {usable = true, cd = false, range = true}
+  onPress(SIM_SLOT)
+end
+function ns.simFight(on)
+  if on then
+    ns.inCombat = true
+    refillBudget(now())
+    budget = math.min(budget, 1.0)
+    fightOpened = false
+    if ns.G and ns.G.fightStart then ns.G.fightStart() end
+    if ns.Log then ns.Log.fightStart(true) end
+  else
+    ns.inCombat = false
+    fightOpened = false
+    lastEnemyName, lastEnemyGUID, enemyWasAlive = nil, nil, false
+    killPending = nil
+    if ns.Log then ns.Log.fightEnd() end
+  end
+end
+function ns.simKill(name)
+  killPending = {t = now(), name = name}
+  enemyWasAlive = false
+  if ns.Log then ns.Log.event({kind = "kill", target = name}) end
+end
+function ns.simHurt() hurtAt = now() end
+-- the simulator must not leave a mark on the real "said recently" memory
+function ns.simSnapshot() local c = {said = {}, last = {}} for k, v in pairs(cdb.said) do c.said[k] = v end for k, v in pairs(cdb.last) do c.last[k] = v end return c end
+function ns.simRestore(c) if c then cdb.said, cdb.last = c.said, c.last end end
+
 
 -- test helpers for the harness
 ns._test = {markTrue = markTrue, resolveArch = resolveArch, render = render, pick = pick, itemMoment = itemMoment,

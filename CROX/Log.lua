@@ -8,6 +8,7 @@ local Log = {}
 ns.Log = Log
 
 local MAX_SESSIONS, MAX_FIGHTS, MAX_EVENTS = 3, 60, 400
+local TEST_MAX_FIGHTS, TEST_MAX_EVENTS = 150, 1500      -- testing mode keeps more
 local session, fight
 local looseStart
 
@@ -24,11 +25,15 @@ function Log.init()
   looseStart = ns.now()
 end
 
-function Log.fightStart()
+local function testing() return ns.cdb and ns.cdb.testing == true end
+
+function Log.fightStart(sim)
   if not session then return end
-  fight = {start = ns.now(), wall = ns.wall(), events = {}, flags = {}}
+  fight = {start = ns.now(), wall = ns.wall(), events = {}, flags = {}, sim = sim and true or nil,
+    test = testing() or nil, pace = ns.chattyNow and ns.chattyNow() or nil}
   table.insert(session.fights, fight)
-  while #session.fights > MAX_FIGHTS do table.remove(session.fights, 1) end
+  local cap = testing() and TEST_MAX_FIGHTS or MAX_FIGHTS
+  while #session.fights > cap do table.remove(session.fights, 1) end
 end
 
 function Log.fightEnd()
@@ -47,7 +52,13 @@ local function add(e)
   local list = fight and fight.events or session.loose
   e.t = ns.now() - (fight and fight.start or looseStart)
   e.wall = ns.wall()
-  if #list < MAX_EVENTS then list[#list + 1] = e end
+  if testing() then      -- testing mode: remember the pace situation behind each event
+    e.budget = ns.getBudget and math.floor(ns.getBudget() * 10 + 0.5) / 10 or nil
+    e.pace = ns.chattyNow and ns.chattyNow() or nil
+    if ns._lastChance then e.chance = math.floor(ns._lastChance * 10 + 0.5) / 10 end
+    if ns.sim then e.sim = true end
+  end
+  if #list < (testing() and TEST_MAX_EVENTS or MAX_EVENTS) then list[#list + 1] = e end
 end
 
 function Log.said(e) add(e) end
@@ -55,6 +66,7 @@ function Log.event(e) add(e) end
 -- the last few quiet presses, kept in memory only, for /x test and /x bug (even outside combat)
 local recentQuiet = {}
 function Log.quiet(ctx, moment, why)
+  if ns.simQuiet then ns.simQuiet(ctx, moment, why) end
   recentQuiet[#recentQuiet + 1] = {at = ns.now(), moment = moment, ability = ctx and ctx.ability,
     item = ctx and ctx.itemName, why = why}
   while #recentQuiet > 8 do table.remove(recentQuiet, 1) end
@@ -350,4 +362,148 @@ function Log.openExport()
   exportFrame.eb:SetText(Log.exportText())
   exportFrame.eb:SetFocus()
   exportFrame.eb:HighlightText()
+end
+
+------------------------------------------------------------------------
+-- Testing mode: the data it collected, with a summary, ready to copy
+------------------------------------------------------------------------
+local function round1(x) return math.floor(x * 10 + 0.5) / 10 end
+
+function Log.testFights()
+  local out = {}
+  for _, s in ipairs(ns.cdb and ns.cdb.log and ns.cdb.log.sessions or {}) do
+    for _, fg in ipairs(s.fights) do if fg.test then out[#out + 1] = {s = s, f = fg} end end
+  end
+  return out
+end
+
+function Log.clearTest()
+  for _, s in ipairs(ns.cdb and ns.cdb.log and ns.cdb.log.sessions or {}) do
+    for i = #s.fights, 1, -1 do if s.fights[i].test then table.remove(s.fights, i) end end
+  end
+end
+
+function Log.testReport()
+  local cdb, pf = ns.cdb, ns.profile
+  local out = {}
+  local function add(x) out[#out + 1] = x end
+  local gv, gb = "?", "?"
+  if GetBuildInfo then local a, b = GetBuildInfo() gv, gb = a or "?", b or "?" end
+  add(("cro/x TEST DATA · %s · game %s (%s) · %s"):format(ns.BUILD, gv, gb, date and date("%Y-%m-%d %H:%M") or ""))
+  add(("character: %s %s · %s · homeland %s · upbringing %s · drive %s"):format(pf.race or "?", (pf.class or "?"):lower(),
+    cdb.temperament or "?", (cdb.homeland or "none"):gsub("^home:", ""), cdb.upbringing or "?", cdb.drive or "?"))
+  local ch, rc = ns.CHATTY[cdb.chatty or 3], ns.CHATTY[cdb.raidChatty or 2]
+  add(("pace: How chatty %s (%s) · raid %s (%s) · emotes %s · yell %s · call and response %s · ask %s · answer %s · take turns %s · profession lines %s"):format(
+    ch and ch.name or "?", ch and ch.est or "?", rc and rc.name or "?", rc and rc.est or "?", tostring(cdb.emotes), tostring(cdb.yell),
+    tostring(cdb.cr), tostring(cdb.crAsk), tostring(cdb.crGive), tostring(cdb.turns), tostring(cdb.profLines ~= false)))
+  add(("errors this session: %d%s"):format(ns.Bug and ns.Bug.errorCount() or 0,
+    (ns.Bug and ns.Bug.lastError()) and (" · last: " .. ns.Bug.lastError().msg) or ""))
+  local list = Log.testFights()
+  if #list == 0 then
+    add("")
+    add("No fights were captured. Turn testing mode on (Options > Testing), fight something or run the combat simulator, then copy again.")
+    return table.concat(out, "\n")
+  end
+  -- totals over every captured fight
+  local totalDur, totalSaid = 0, 0
+  local reasons, moments, gaps = {}, {}, {}
+  for _, it in ipairs(list) do
+    local fg = it.f
+    local prev
+    totalDur = totalDur + (fg.dur or 0)
+    for _, e in ipairs(fg.events) do
+      if e.text then
+        totalSaid = totalSaid + 1
+        moments[e.moment or "?"] = (moments[e.moment or "?"] or 0) + 1
+        if prev then gaps[#gaps + 1] = e.t - prev end
+        prev = e.t
+      elseif e.kind == "quiet" then
+        local w = (e.why or "?"):gsub("%d+", "#")
+        reasons[w] = (reasons[w] or 0) + 1
+      end
+    end
+  end
+  table.sort(gaps)
+  local function pctile(q) if #gaps == 0 then return 0 end return gaps[math.max(1, math.ceil(#gaps * q))] end
+  add("")
+  add(("SUMMARY · %d fights · %s of combat · %d lines · about %s a minute"):format(#list, clock(totalDur), totalSaid,
+    totalDur > 0 and round1(totalSaid / (totalDur / 60)) or "0"))
+  add(("gaps between lines: shortest %ss · median %ss · 90%% under %ss · longest %ss"):format(
+    #gaps > 0 and round1(gaps[1]) or "-", round1(pctile(0.5)), round1(pctile(0.9)), #gaps > 0 and round1(gaps[#gaps]) or "-"))
+  local function top(t, n)
+    local arr = {}
+    for k, v in pairs(t) do arr[#arr + 1] = {k, v} end
+    table.sort(arr, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
+    local o = {}
+    for i = 1, math.min(n, #arr) do o[#o + 1] = ("%s x%d"):format(arr[i][1], arr[i][2]) end
+    return table.concat(o, ", ")
+  end
+  add("said most on: " .. top(moments, 8))
+  add("quiet because: " .. top(reasons, 8))
+  add("")
+  for i, it in ipairs(list) do
+    local fg = it.f
+    local said, quiet, prev, longest = 0, 0, 0, 0
+    for _, e in ipairs(fg.events) do
+      if e.text then said = said + 1 longest = math.max(longest, e.t - prev) prev = e.t
+      elseif e.kind == "quiet" then quiet = quiet + 1 end
+    end
+    longest = math.max(longest, (fg.dur or 0) - prev)
+    add(("-- fight %d%s · %s · vs %s · pace %s · %d said, %d quiet · longest silence %ss%s"):format(i, fg.sim and " (SIMULATED)" or "",
+      clock(fg.dur), fg.foePlayer and "an enemy player" or (fg.foe or "?"), tostring(fg.pace or "?"), said, quiet, round1(longest),
+      fg.flagged and " · FLAGGED" or ""))
+    for idx, e in ipairs(fg.events) do
+      if e.text then
+        local fl = fg.flags and fg.flags[idx]
+        add(("  %s SAID %s | %s | pace %s budget %s chance %s%%%s"):format(clock(e.t), Log.describe(e, true), e.moment or "", tostring(e.pace or "?"),
+          tostring(e.budget or "?"), tostring(e.chance or "?"), fl and (" | FLAG: " .. (fl.reason or "?") .. ((fl.note and fl.note ~= "") and (" - " .. fl.note) or "")) or ""))
+      elseif e.kind == "quiet" then
+        add(("  %s quiet | %s | %s | %s | budget %s chance %s%%"):format(clock(e.t), e.moment or "-", e.ability or e.item or "-", e.why or "-",
+          tostring(e.budget or "?"), tostring(e.chance or "?")))
+      elseif e.kind == "kill" then
+        add(("  %s kill"):format(clock(e.t)))
+      end
+    end
+  end
+  return table.concat(out, "\n")
+end
+
+local testFrame
+function Log.openTestData()
+  if not testFrame then
+    local f = W.panel("CROX2TestDataFrame", "cro/x - test data", 640, 520)
+    testFrame = f
+    local how = W.text(f, "|cffffd100How to send this|r\n" ..
+      "1. Leave testing mode on and play as you normally would, or run the combat simulator (/x sim).\n" ..
+      "2. When you have a few fights, open this window (/x testdata, or Options > Testing > Copy test data).\n" ..
+      "3. Click in the box, press Ctrl+A then Ctrl+C to copy everything.\n" ..
+      "4. Paste it into the beta Discord (use a file or a code block for long text) or a GitHub issue, with a note on what felt wrong.\n" ..
+      "Nothing is sent for you. Other players show only as their class, and the report has no account or email information.", "GameFontHighlightSmall")
+    how:SetPoint("TOPLEFT", 16, -34)
+    how:SetPoint("RIGHT", -16, 0)
+    how:SetJustifyH("LEFT")
+    how:SetWordWrap(true)
+    local sf = W.make("ScrollFrame", f, {"UIPanelScrollFrameTemplate"}, "CROX2TestDataScroll")
+    sf:SetPoint("TOPLEFT", 14, -130)
+    sf:SetPoint("BOTTOMRIGHT", -32, 44)
+    local eb = CreateFrame("EditBox", nil, sf)
+    eb:SetMultiLine(true)
+    eb:SetAutoFocus(false)
+    eb:SetFontObject("ChatFontNormal")
+    eb:SetWidth(580)
+    eb:SetMaxLetters(0)
+    eb:SetScript("OnEscapePressed", function() f:Hide() end)
+    sf:SetScrollChild(eb)
+    f.eb = eb
+    local sel = W.button(f, "Select all", 110, function() eb:SetFocus() eb:HighlightText() end)
+    sel:SetPoint("BOTTOMRIGHT", -16, 12)
+    local clear = W.button(f, "Clear test data", 130, function() Log.clearTest() eb:SetText(Log.testReport()) end)
+    clear:SetPoint("RIGHT", sel, "LEFT", -6, 0)
+    local close = W.button(f, "Close", 90, function() f:Hide() end)
+    close:SetPoint("RIGHT", clear, "LEFT", -6, 0)
+  end
+  testFrame:Show()
+  testFrame.eb:SetText(Log.testReport())
+  testFrame.eb:SetFocus()
+  testFrame.eb:HighlightText()
 end
