@@ -325,7 +325,7 @@ local function buildHome(parent)
   s.chattyDD, s.chattyHint = chattyDD, chattyHint
   local raidDD, _, raidHint = speakRow(2, "In a group", "", function() return ns.chattyItems(true) end, function() return cdb().raidChatty or 3 end,
     function(v) cdb().raidChatty = v s:refreshChoices() end,
-    "How talkative you are whenever you are in a party or a raid. The group shares one pace, set by its loudest member. Booming and Roaring are only here.")
+    "How talkative you are whenever you are in a party or a raid. The group shares one pace, set by its loudest member. Windbag and Deafening are only here.")
   s.raidDD, s.raidHint = raidDD, raidHint
   local askL, askH
   s.askDD, askL, askH = speakRow(3, "Ask for help", "", CR_LEVELS, function() return cdb().crAsk or 4 end,

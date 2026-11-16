@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.60"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.60-beta.5"
+local BUILD = "0.60-beta.6"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -726,13 +726,13 @@ ns.channelFor = channelFor
 -- Pace. Each level has a target spread of lines a minute, a rate (the middle of the spread, used to refill the speech
 -- budget) and a chance multiplier. In a party the loudest member's rate sets the whole party's budget.
 local CHATTY = {
-  [1] = {name = "Silent", est = "0-1 a minute", rate = 0.5, mult = 0.05},
-  [2] = {name = "Hushed", est = "1-3 a minute", rate = 2.0, mult = 0.3},
-  [3] = {name = "Steady", est = "2-4 a minute", rate = 3.0, mult = 0.6},
-  [4] = {name = "Vocal", est = "3-5 a minute", rate = 4.0, mult = 0.85},
-  [5] = {name = "Loud", est = "4-6 a minute", rate = 5.0, mult = 1.2},
-  [6] = {name = "Booming", est = "5-7 a minute", rate = 6.0, mult = 1.6},      -- group setting only
-  [7] = {name = "Roaring", est = "6-7 a minute", rate = 6.5, mult = 1.9},   -- group setting only
+  [1] = {name = "Hushed", est = "0-1 a minute", rate = 0.5, mult = 0.05},
+  [2] = {name = "Reserved", est = "1-3 a minute", rate = 2.0, mult = 0.3},
+  [3] = {name = "Social", est = "2-4 a minute", rate = 3.0, mult = 0.6},
+  [4] = {name = "Talkative", est = "3-5 a minute", rate = 4.0, mult = 0.85},
+  [5] = {name = "Chatty", est = "4-6 a minute", rate = 5.0, mult = 1.2},
+  [6] = {name = "Windbag", est = "5-7 a minute", rate = 6.0, mult = 1.6},      -- group setting only
+  [7] = {name = "Deafening", est = "6-7 a minute", rate = 6.5, mult = 1.9},   -- group setting only
 }
 local SOLO_LEVELS = 5       -- the solo setting offers the first five; the last two are for groups
 -- Speech budget: it refills steadily at the level's rate, a line costs one, and it holds at most two, so there can

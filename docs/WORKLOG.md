@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.60-beta.6 · 2026-11-15
+- pace levels renamed: Hushed, Reserved, Social, Talkative, Chatty, Windbag, Deafening
+
 ## 0.60-beta.5 · 2026-11-15
 - Setup: name in a class-coloured box (first and last from Total RP 3), flavor text under the dropdowns, Another One button
 

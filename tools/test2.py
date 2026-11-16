@@ -310,10 +310,10 @@ r = lua.eval('''function(ns)
   out.always, out.rarely = always, hits / 2000
   ns.cdb.crAsk = 4
   return out end''')(ns)
-check("seven levels: solo offers five, groups all seven", r["levels"] == 7 and r["soloCount"] == 5 and r["groupCount"] == 7 and r["item1"] == "Silent" and r["item3"] == "Steady" and r["item5"] == "Loud" and r["lastGroup"] == "Roaring", (r["item1"], r["item3"], r["item5"], r["lastGroup"]))
+check("seven levels: solo offers five, groups all seven", r["levels"] == 7 and r["soloCount"] == 5 and r["groupCount"] == 7 and r["item1"] == "Hushed" and r["item3"] == "Social" and r["item5"] == "Chatty" and r["lastGroup"] == "Deafening", (r["item1"], r["item3"], r["item5"], r["lastGroup"]))
 check("pace rates rise with each level", r["perMin"] == "0.5,2,3,4,5,6,6.5", r["perMin"])
 check("older paces move onto the seven-level scale by rate", r["migrated"] == "4,3,3" and r["migratedLively"] == 5, (r["migrated"], r["migratedLively"]))
-check("new characters start at Steady (2-4) alone and in a group, call dials Always", r["fresh"] == "3,3,4,4", r["fresh"])
+check("new characters start at Social (2-4) alone and in a group, call dials Always", r["fresh"] == "3,3,4,4", r["fresh"])
 check("call dials: Always never skips, Rarely about a quarter", r["always"] and 0.18 < r["rarely"] < 0.32, r["rarely"])
 
 # --- multi-speaker groundwork

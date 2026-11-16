@@ -303,3 +303,6 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 ## Setup page: name box, flavor text under the dropdowns (0.60-beta.5)
 - The line under the title card that gave the character's name is now a box of its own, like the other headers (dark plate with thin gold lines), with the name in the player's class colour at a larger size, then race and class in grey. It shows the first and last name from Total RP 3 when that addon is loaded and has them (`ns.fullName`), and otherwise the game's character name, which is only a first name. Shown on the Setup page only; never stored or sent.
 - In "Who are you?", each choice's line of flavor text now sits under its dropdown instead of beside it, and the "Another" button reads "Another One".
+
+## Pace level names (0.60-beta.6)
+- The seven levels are now Hushed (0-1 lines a minute), Reserved (1-3), **Social (2-4, the default)**, Talkative (3-5), Chatty (4-6), Windbag (5-7) and Deafening (6-7). On your own offers the first five; In a group offers all seven (Windbag and Deafening are group only). Rates and multipliers are unchanged; only the names moved.
