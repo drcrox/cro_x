@@ -157,7 +157,9 @@ lt = lua.eval('''function(ns)
   st.sources = {class = true, spec = true}; out.classSpec = count()
   st.moments = {kill = true}; st.sources = {base = true}; out.killBase = count()
   st.moments = {}; st.sources = {}; st.search = "zzzzqq"; out.none = count()
-  st.search = ""; s.picker:Show(); s:refresh(); out.openOk = s.picker:IsShown() and s.picker:GetWidth() < 300
+  st.search = ""; s.picker:Show(); s:refresh(); out.openOk = s.picker:IsShown() and s.picker:GetWidth() > 350 and s.picker:GetWidth() < 450 and s.picker.mBoxes[1].__pts == nil
+  s.picker:SetSize(800, 500); local sc = s.picker._scripts and s.picker._scripts.OnSizeChanged; if sc then sc[1](s.picker) end
+  s.picker:SetSize(250, 500); if sc then sc[1](s.picker) end
   s.picker:Hide(); st.limit = 100; s:refresh()
   return out end''')(ns)
 def n_of(t): return int(str(t).split(" ")[0])

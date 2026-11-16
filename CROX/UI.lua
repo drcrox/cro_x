@@ -716,36 +716,60 @@ local function buildLines(parent)
     ph:SetShown(state.search == "")
     changed()
   end)
-  -- the chooser is its own small window that pops out under the button (about its width), so the list never moves
-  local ROWH = 24
-  local panel = W.panel("CROX2LinesPicker", "Choose sets of lines", 276, 430)
+  -- the chooser is its own window that pops out at the pointer; it can be resized, and the checkboxes flow into
+  -- as many columns as fit (two by default)
+  local ROWH, COLW = 24, 172
+  local saved = ns.db and ns.db.pickerSize
+  local panel = W.panel("CROX2LinesPicker", "Choose sets of lines",
+    saved and saved[1] or 2 * COLW + 56, saved and saved[2] or 470)
+  panel:SetResizable(true)
+  if panel.SetResizeBounds then panel:SetResizeBounds(2 * 100 + 56, 240, 1000, 900)
+  elseif panel.SetMinResize then panel:SetMinResize(256, 240) panel:SetMaxResize(1000, 900) end
   local sf, content = W.scroll(panel)
   sf:SetPoint("TOPLEFT", 10, -30)
   sf:SetPoint("BOTTOMRIGHT", -30, 74)
   panel.mBoxes, panel.sBoxes = {}, {}
-  local y = -2
   local mHead = W.heading(content, "Moments")
-  mHead:SetPoint("TOPLEFT", 4, y)
-  y = y - 24
   for _, it in ipairs(momentItems) do
     local key = it[1]
-    local c = W.check(content, it[2], function(_, on) state.moments[key] = on or nil changed() end)
-    c:SetPoint("TOPLEFT", 0, y)
-    panel.mBoxes[#panel.mBoxes + 1] = c
-    y = y - ROWH
+    panel.mBoxes[#panel.mBoxes + 1] = W.check(content, it[2], function(_, on) state.moments[key] = on or nil changed() end)
   end
-  y = y - 10
   local sHead = W.heading(content, "Sources and tags")
-  sHead:SetPoint("TOPLEFT", 4, y)
-  y = y - 24
   for _, it in ipairs(SOURCE_LIST) do
     local key = it[1]
-    local c = W.check(content, it[2], function(_, on) state.sources[key] = on or nil changed() end)
-    c:SetPoint("TOPLEFT", 0, y)
-    panel.sBoxes[#panel.sBoxes + 1] = c
-    y = y - ROWH
+    panel.sBoxes[#panel.sBoxes + 1] = W.check(content, it[2], function(_, on) state.sources[key] = on or nil changed() end)
   end
-  content:SetHeight(-y + 8)
+  local function flow()
+    local w = panel:GetWidth() or (2 * COLW + 56)
+    local cols = math.max(1, math.floor((w - 52) / COLW))
+    local y = -2
+    local function place(head, boxes)
+      head:ClearAllPoints() head:SetPoint("TOPLEFT", 4, y)
+      y = y - 24
+      for i, c in ipairs(boxes) do
+        c:ClearAllPoints()
+        c:SetPoint("TOPLEFT", ((i - 1) % cols) * COLW, y - math.floor((i - 1) / cols) * ROWH)
+      end
+      y = y - math.ceil(#boxes / cols) * ROWH - 10
+    end
+    place(mHead, panel.mBoxes)
+    place(sHead, panel.sBoxes)
+    content:SetHeight(-y + 8)
+  end
+  panel:SetScript("OnSizeChanged", function() flow() end)
+  flow()
+  local grip = CreateFrame("Button", nil, panel)
+  grip:SetSize(16, 16)
+  grip:SetPoint("BOTTOMRIGHT", -4, 4)
+  grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+  grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+  grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+  grip:SetScript("OnMouseDown", function() panel:StartSizing("BOTTOMRIGHT") end)
+  grip:SetScript("OnMouseUp", function()
+    panel:StopMovingOrSizing()
+    flow()
+    if ns.db then ns.db.pickerSize = {math.floor(panel:GetWidth() + 0.5), math.floor(panel:GetHeight() + 0.5)} end
+  end)
   panel.note = W.hint(panel, "Nothing ticked shows every line.")
   panel.note:SetPoint("BOTTOMLEFT", 14, 48)
   panel.clear = W.button(panel, "Clear ticks", 120, function()
@@ -756,7 +780,7 @@ local function buildLines(parent)
   end)
   panel.clear:SetPoint("BOTTOMLEFT", 12, 14)
   panel.done = W.button(panel, "Done", 90, function() panel:Hide() end)
-  panel.done:SetPoint("BOTTOMRIGHT", -12, 14)
+  panel.done:SetPoint("BOTTOMRIGHT", -28, 14)
   panel:HookScript("OnHide", function() state.open = false end)
   s:SetScript("OnHide", function() panel:Hide() end)
   s.picker = panel
