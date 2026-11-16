@@ -944,6 +944,15 @@ end''')(ns, H)
 r = dict(r)
 check("the note about other people's game shows only at the two loudest levels", r["quietHidden"] and r["chattyHidden"] and r["windbag"] and r["deafening"], r)
 
+# the version sits under the Credits tab
+r = lua.eval('''function(ns)
+  ns.relayout()
+  local v = ns._verLabel
+  return {text = v and v:GetText(), shown = v and v._shown ~= false}
+end''')(ns)
+r = dict(r)
+check("the version label sits in the section list, under the Credits tab", r["shown"] and r["text"] and "0.60" in r["text"], r)
+
 # --- Setup page: Character tags tabs, with a box on what the character has
 r = lua.eval('''function(ns)
   ns.openSection("home")

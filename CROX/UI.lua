@@ -543,8 +543,6 @@ local function buildHome(parent)
   foot:SetPoint("TOPLEFT", tip, "BOTTOMLEFT", -4, -8)
   foot:SetPoint("RIGHT", s, "RIGHT", -8, 0)
   foot:SetHeight(30)
-  local ver = W.hint(s, ns.BUILD)       -- the bottom corner of the picture (the artist's signature is bottom right)
-  ver:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", 8, 6)
   local done = W.button(foot, "Done", 90, function() s:finish(false) end)
   done:SetPoint("RIGHT", 0, 0)
   local lines = W.button(foot, "Choose lines", 110, function() s:finish(true) end)
@@ -1714,6 +1712,15 @@ local function relayout()
     end
     prev = b
   end
+  if listFrame.ver then
+    listFrame.ver:ClearAllPoints()
+    if narrow and prev then
+      listFrame.ver:Hide()                    -- the tabs lie in a row along the top: no room under them
+    elseif prev then
+      listFrame.ver:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 10, -4)
+      listFrame.ver:Show()
+    end
+  end
   if narrow then
     listFrame:SetPoint("TOPLEFT", hordePage, "TOPLEFT", 0, 0)
     listFrame:SetPoint("TOPRIGHT", hordePage, "TOPRIGHT", 0, 0)
@@ -1823,6 +1830,9 @@ local function buildMain()
     b:SetScript("OnClick", function() showSection(sd[1]) end)
     sectionButtons[sd[1]] = b
   end
+  -- the version, directly under the last tab (Credits)
+  listFrame.ver = W.hint(listFrame, ns.BUILD)
+  ns._verLabel = listFrame.ver
   scrollFrame, scrollChild = W.scroll(hordePage)
   sections = {}
   ns._sections = sections

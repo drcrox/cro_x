@@ -312,3 +312,6 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 
 ## Colons on the Setup labels (0.60-beta.8)
 - Every dropdown label on the Setup page now ends in a colon: Temperament:, Homeland:, Origin:, Motivation:, Pronouns:, On your own:, In a group:, Ask for help:, Answer a call:, Troll voice:. Tooltip titles stay without it. Checkboxes and tab names are unchanged.
+
+## Version under the Credits tab (0.60-beta.9)
+- The version label (for example 0.60-beta.9) moved from the Setup page's bottom-left corner to the section list, directly under the Credits tab, so it shows on every page. In a window so narrow that the tabs lie in a row along the top, it is hidden.

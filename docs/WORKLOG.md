@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.60-beta.9 · 2026-11-15
+- version label under the Credits tab
+
 ## 0.60-beta.8 · 2026-11-15
 - colons on the Setup page labels
 
