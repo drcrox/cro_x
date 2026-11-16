@@ -12,9 +12,9 @@ CROX2_CREDITS = {
         license = "Used under Blizzard's terms for World of Warcraft add-ons", used = "Everywhere"},
       {what = "Alliance screen background (cropped from the World of Warcraft poster, 2005)", by = "Blizzard Entertainment",
         source = "Warcraft Wiki, Horde Poster image", url = "https://warcraft.wiki.gg/wiki/File:Horde_Poster.jpg",
-        license = "(c) 2005 Blizzard Entertainment. Shown as a fan tribute; will be removed on request", used = "Alliance screen and Horde splash page"},
+        license = "(c) 2005 Blizzard Entertainment. Shown as a fan tribute; will be removed on request", used = "Alliance screen and the Setup page page"},
       {what = "Morpheus display font", by = "Blizzard Entertainment", source = "World of Warcraft game client",
-        license = "Loaded from the game", used = "LOK'TAR OGAR, splash page title"},
+        license = "Loaded from the game", used = "LOK'TAR OGAR, Setup page title"},
     },
   },
   {

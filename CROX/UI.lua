@@ -7,7 +7,7 @@ local ADDON, ns = ...
 local W = ns.W
 local p = ns.p
 
-local BASE_W, BASE_H = 660, 500
+local BASE_W, BASE_H = 780, 720
 local LIST_W = 140
 local main, body, sections, current
 local sectionButtons = {}
@@ -172,81 +172,249 @@ local CHOICES = {{"temperament", "Temperament"}, {"homeland", "Homeland"}, {"upb
   {"drive", "What drives them"}, {"pronouns", "Pronouns"}}
 ns.CHOICES = CHOICES
 
-local function buildCharacter(parent)
+local SPLASH_HINTS = {pronouns = "Used in emotes"}
+
+-- The first section, and the first thing you see: who the character is and how they speak. It replaces the old
+-- Character tab and the splash page. The poster sits behind it, whole, fitted inside the area.
+local function buildHome(parent)
   local s = CreateFrame("Frame", nil, parent)
-  ns.paintArea(s, "charBg", 0.6)
-  local h1 = W.heading(s, "Read from the game")
-  h1:SetPoint("TOPLEFT", 4, -4)
-  s.facts = W.text(s, "", "GameFontHighlight")
-  s.facts:SetPoint("TOPLEFT", h1, "BOTTOMLEFT", 0, -6)
-  local h2 = W.heading(s, "Your choices")
-  h2:SetPoint("TOPLEFT", 4, -50)
-  -- a fixed grid: every row is the same height, labels in one column, dropdowns lined up in the next,
-  -- the sample line beside the dropdown (beneath it when the window is narrow)
-  local ROW_H, LABEL_W, DD_W = 50, 130, 150
-  s.rows = {}
+  posterBG(s)
+  local dim = s:CreateTexture(nil, "BACKGROUND", nil, 0)
+  dim:SetAllPoints()
+  dim:SetColorTexture(0, 0, 0, 0.3)
+
+  -- the title card
+  local card = CreateFrame("Frame", nil, s)
+  card:SetPoint("TOPLEFT", 4, -6)
+  card:SetPoint("TOPRIGHT", -4, -6)
+  card:SetHeight(54)
+  local ct = card:CreateTexture(nil, "BACKGROUND")
+  ct:SetAllPoints()
+  ct:SetColorTexture(0, 0, 0, 0.5)
+  for _, edge in ipairs({"TOP", "BOTTOM"}) do
+    local ln = card:CreateTexture(nil, "ARTWORK")
+    ln:SetPoint(edge .. "LEFT", 20, 0) ln:SetPoint(edge .. "RIGHT", -20, 0) ln:SetHeight(2)
+    ln:SetColorTexture(0.78, 0.6, 0.15, 0.9)
+  end
+  local title = card:CreateFontString(nil, "OVERLAY")
+  if not pcall(title.SetFont, title, "Fonts\\MORPHEUS.TTF", 34, "THICKOUTLINE") then title:SetFontObject("GameFontNormalHuge") end
+  title:SetTextColor(1, 0.82, 0)
+  title:SetText("Combat Roleplay Options")
+  title:SetPoint("CENTER", 0, 0)
+  s.title = title
+  s.who = W.text(s, "", "GameFontHighlight")
+  s.who:SetPoint("TOP", card, "BOTTOM", 0, -6)
+
+  local function dark(f)
+    local t = f:CreateTexture(nil, "BACKGROUND")
+    t:SetAllPoints()
+    t:SetColorTexture(0, 0, 0, 0.62)
+  end
+
+  -- who are you: the five choices, each with a line of flavor, then an example line
+  local plate = CreateFrame("Frame", nil, s)
+  plate:SetPoint("TOP", s.who, "BOTTOM", 0, -12)
+  plate:SetPoint("LEFT", s, "LEFT", 8, 0)
+  plate:SetPoint("RIGHT", s, "RIGHT", -8, 0)
+  plate:SetHeight(40 + #CHOICES * 34 + 44)
+  dark(plate)
+  local head = W.heading(plate, "Who are you?")
+  head:SetPoint("TOP", plate, "TOP", 0, -10)
+  local grp = CreateFrame("Frame", nil, plate)
+  grp:SetSize(560, #CHOICES * 34)
+  grp:SetPoint("TOP", plate, "TOP", 0, -34)
+  s.grp = grp
+  s.dds, s.hints = {}, {}
   for i, ch in ipairs(CHOICES) do
     local kind = ch[1]
-    local y = -76 - (i - 1) * ROW_H
-    local label = W.text(s, ch[2], "GameFontNormal")
-    label:SetPoint("TOPLEFT", 8, y - 7)
-    label:SetWidth(LABEL_W - 8)
-    -- the dropdown template has about 16 px of empty space on its left; pull it back so the box sits on the grid
-    local dd = W.dropdown(s, DD_W, function() return choiceItems(kind) end, function() return cdb()[kind] end,
-      function(v) cdb()[kind] = v s:refresh() end)
-    dd:SetPoint("TOPLEFT", LABEL_W - 16, y)
-    local sample = W.text(s, "", "GameFontDisableSmall")
-    sample:SetWordWrap(true)
-    s.rows[kind] = {label = label, dd = dd, sample = sample, y = y}
+    local y = -(i - 1) * 34
+    local label = W.text(grp, ch[2], "GameFontNormal")
+    label:SetPoint("TOPLEFT", 0, y - 6)
+    local dd = W.dropdown(grp, 170, function() return choiceItems(kind) end, function() return cdb()[kind] end,
+      function(v) cdb()[kind] = v s:refreshChoices(kind) end)
+    dd:SetPoint("TOPLEFT", 100, y + 2)
+    local hint = W.text(grp, "", "GameFontHighlightSmall")
+    hint:SetPoint("LEFT", dd, "RIGHT", -2, 2)
+    hint:SetPoint("RIGHT", grp, "RIGHT", 0, 0)
+    hint:SetHeight(30)
+    hint:SetWordWrap(true)
+    hint:SetJustifyV("MIDDLE")
+    s.dds[kind] = dd
+    s.hints[kind] = hint
   end
-  local gridBottom = -76 - #CHOICES * ROW_H
-  local h3 = W.heading(s, "Spec lines unlocked")
-  h3:SetPoint("TOPLEFT", 4, gridBottom - 10)
-  s.spec = W.text(s, "", "GameFontHighlightSmall")
-  s.spec:SetPoint("TOPLEFT", h3, "BOTTOMLEFT", 0, -6)
-  local hint = W.hint(s, "Spec lines unlock as you spend talent points deeper in a tree.")
-  hint:SetPoint("TOPLEFT", s.spec, "BOTTOMLEFT", 0, -4)
-  s.LABEL_W, s.DD_W = LABEL_W, DD_W
-  local hear = W.button(s, "Hear a sample", 130, function()
-    local line = ns.sample("any")
-    p(line and ("|cffffffff\"" .. line .. "\"|r  (only you see this)") or "no sample available.")
-  end)
-  hear:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -14)
-  W.tooltip(hear, "Hear a sample", "Prints a line in your character's voice to your own chat window. Nobody else sees it.")
-  local redo = W.button(s, "Redo setup", 110, function() if ns.openSetup then ns.openSetup() end end)
-  redo:SetPoint("LEFT", hear, "RIGHT", 8, 0)
-  s.bottom = hear
+  local ex = W.text(plate, "", "GameFontHighlight")
+  ex:SetPoint("TOPLEFT", grp, "BOTTOMLEFT", 0, -8)
+  ex:SetPoint("RIGHT", grp, "RIGHT", -84, 0)
+  ex:SetHeight(32)
+  ex:SetWordWrap(true)
+  ex:SetJustifyV("TOP")
+  s.example = ex
+  local another = W.button(plate, "Another", 76, function() s:rollExample() end)
+  another:SetPoint("TOPRIGHT", grp, "BOTTOMRIGHT", 0, -6)
+  W.tooltip(another, "Another example", "Another line in your character's voice. Only you see this.")
+  function s:rollExample(kind)
+    local pick = kind
+    if not pick or pick == "pronouns" then
+      local kinds = {"temperament", "homeland", "upbringing", "drive"}
+      pick = kinds[math.random(#kinds)]
+    end
+    local line = ns.sample(pick)
+    self.example:SetText(line and ("|cffffd100Example:|r \"" .. line .. "\"") or "")
+  end
 
-  function s:refresh()
-    local pf = ns.profile
-    self.facts:SetText(("%s · %s · %s"):format(pf.race or "?", cap((pf.class or "?"):lower()), profText()))
-    for kind, r in pairs(self.rows) do
-      r.dd.refresh()
-      local line = ns.sample(kind)
-      r.sample:SetText(line and ("\"" .. line .. "\"") or "")
-    end
-    self.spec:SetText(specText())
+  -- how do you speak: pace, call and response, content, sounds
+  local plate2 = CreateFrame("Frame", nil, s)
+  plate2:SetPoint("TOP", plate, "BOTTOM", 0, -8)
+  plate2:SetPoint("LEFT", s, "LEFT", 8, 0)
+  plate2:SetPoint("RIGHT", s, "RIGHT", -8, 0)
+  plate2:SetHeight(300)
+  dark(plate2)
+  local head2 = W.heading(plate2, "How do you speak?")
+  head2:SetPoint("TOP", plate2, "TOP", 0, -10)
+  local grp2 = CreateFrame("Frame", nil, plate2)
+  grp2:SetSize(440, 200)
+  grp2:SetPoint("TOP", plate2, "TOP", 0, -34)
+  local CR_LEVELS = function() return {{1, "Rarely"}, {2, "Sometimes"}, {3, "Often"}, {4, "Always"}} end
+  local function speakRow(i, text, hint, items, get, set, tip)
+    local label = W.text(grp2, text, "GameFontNormal")
+    label:SetPoint("TOPLEFT", 0, -(i - 1) * 34 - 6)
+    local dd = W.dropdown(grp2, 170, items, get, set)
+    dd:SetPoint("TOPLEFT", 100, -(i - 1) * 34 + 2)
+    local h = W.text(grp2, hint, "GameFontDisableSmall")
+    h:SetPoint("LEFT", dd, "RIGHT", -6, 2)
+    if tip then W.tooltip(label, text, tip) end
+    return dd, label, h
   end
-  function s:layout(w)
-    self.facts:SetWidth(w - 10)
-    self.spec:SetWidth(w - 10)
-    local besideX = self.LABEL_W + self.DD_W + 24
-    local beside = w - besideX >= 160
-    for _, r in pairs(self.rows) do
-      r.sample:ClearAllPoints()
-      if beside then
-        r.sample:SetPoint("TOPLEFT", besideX, r.y - 4)
-        r.sample:SetWidth(w - besideX - 8)
-        r.sample:SetHeight(32)
-        r.sample:SetJustifyV("MIDDLE")
-      else
-        r.sample:SetPoint("TOPLEFT", self.LABEL_W, r.y - 30)
-        r.sample:SetWidth(w - self.LABEL_W - 8)
-        r.sample:SetHeight(14)
-        r.sample:SetJustifyV("TOP")
-      end
+  local chattyDD, _, chattyHint = speakRow(1, "How chatty", "", ns.chattyItems, function() return cdb().chatty end,
+    function(v) cdb().chatty = v s:refreshChoices() end,
+    "How many lines a minute to expect in a fight. These are rough: the real rate depends on how fast you press. In a party the shared party pace still applies.")
+  s.chattyDD, s.chattyHint = chattyDD, chattyHint
+  local raidDD, _, raidHint = speakRow(2, "In a raid", "", ns.chattyItems, function() return cdb().raidChatty or 2 end,
+    function(v) cdb().raidChatty = v s:refreshChoices() end,
+    "How chatty in a raid, with the same five levels. Raids are noisy already, so this starts at Quiet.")
+  s.raidDD, s.raidHint = raidDD, raidHint
+  s.askDD = speakRow(3, "Ask for help", "How often you call for aid", CR_LEVELS, function() return cdb().crAsk or 4 end,
+    function(v) cdb().crAsk = v end,
+    "How often your character calls for help (a debuff, low health, an enemy on you) when a cro/x partymate could answer. Always means every time it fits.")
+  s.giveDD = speakRow(4, "Answer a call", "How often you speak when helping", CR_LEVELS, function() return cdb().crGive or 4 end,
+    function(v) cdb().crGive = v end,
+    "How often your character says something when they answer a call. They still help either way; Rarely just means they usually do it quietly.")
+  local trollDD, trollL, trollH = speakRow(5, "Troll voice", "Accent or plain",
+    function() return {{"accent", "Accent"}, {"plain", "Plain"}} end, function() return cdb().troll end,
+    function(v) cdb().troll = v s:refreshChoices() end,
+    "Trolls speak with the accent from the first alpha's converter. Emotes and your own lines stay as written.")
+  s.trollDD, s.trollL, s.trollH = trollDD, trollL, trollH
+  local SWITCHES = {
+    {"emotes", "Emotes", "Emotes stay a rare accent either way."},
+    {"yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies."},
+    {"cr", "Call and response", "Your character calls for help and answers other cro/x users in your group."},
+    {"turns", "Take turns with the party", "cro/x users in a party take turns instead of talking over each other. Turning it off only affects you."},
+    {"filter", "Profanity filter", "Real-world swear words are swapped for clean versions. Your own lines are never changed."},
+    {"sound", "Window sounds", "The small clicks and chimes when cro/x windows open and close."},
+  }
+  s.switches = {}
+  for i, sw in ipairs(SWITCHES) do
+    local key = sw[1]
+    local c = W.check(grp2, sw[2], function(_, on) cdb()[key] = on and true or false end)
+    W.tooltip(c, sw[2], sw[3])
+    s.switches[key] = c
+    c._index = i
+  end
+  -- the troll row only exists for a troll; everything below moves up when it isn't there
+  function s:layoutSpeak()
+    local troll = ns.isTroll()
+    trollDD:SetShown(troll) trollL:SetShown(troll) trollH:SetShown(troll)
+    local top = (troll and 5 or 4) * 34 + 4
+    for key, c in pairs(self.switches) do
+      local i = c._index
+      c:ClearAllPoints()
+      c:SetPoint("TOPLEFT", ((i - 1) % 2) * 220, -top - math.floor((i - 1) / 2) * 26)
+      c:SetChecked(cdb()[key] == true)
     end
-    return 520
+    local gh = top + 3 * 26 + 4
+    grp2:SetHeight(gh)
+    plate2:SetHeight(34 + gh + 10)
+  end
+
+  -- read from the game: professions and how deep the spec lines have unlocked
+  local plate3 = CreateFrame("Frame", nil, s)
+  plate3:SetPoint("TOP", plate2, "BOTTOM", 0, -8)
+  plate3:SetPoint("LEFT", s, "LEFT", 8, 0)
+  plate3:SetPoint("RIGHT", s, "RIGHT", -8, 0)
+  plate3:SetHeight(92)
+  dark(plate3)
+  local head3 = W.heading(plate3, "Read from the game")
+  head3:SetPoint("TOPLEFT", 14, -10)
+  s.facts = W.text(plate3, "", "GameFontHighlight")
+  s.facts:SetPoint("TOPLEFT", head3, "BOTTOMLEFT", 0, -4)
+  s.facts:SetPoint("RIGHT", plate3, "RIGHT", -14, 0)
+  s.facts:SetJustifyH("LEFT")
+  s.spec = W.text(plate3, "", "GameFontHighlightSmall")
+  s.spec:SetPoint("TOPLEFT", s.facts, "BOTTOMLEFT", 0, -6)
+  s.spec:SetPoint("RIGHT", plate3, "RIGHT", -14, 0)
+  s.spec:SetJustifyH("LEFT")
+  local sh = W.hint(plate3, "Spec lines unlock as you spend talent points deeper in a tree.")
+  sh:SetPoint("TOPLEFT", s.spec, "BOTTOMLEFT", 0, -3)
+
+  -- the foot: done, choose lines, show at login
+  local tip = W.hint(s, "Type /x any time to come back here  ·  /x flag to review a fight")
+  tip:SetPoint("TOP", plate3, "BOTTOM", 0, -8)
+  local foot = CreateFrame("Frame", nil, s)
+  foot:SetPoint("TOPLEFT", tip, "BOTTOMLEFT", -4, -8)
+  foot:SetPoint("RIGHT", s, "RIGHT", -8, 0)
+  foot:SetHeight(30)
+  local ver = W.hint(foot, ns.BUILD)
+  ver:SetPoint("LEFT", 6, 0)
+  local done = W.button(foot, "Done", 90, function() s:finish(false) end)
+  done:SetPoint("RIGHT", 0, 0)
+  local lines = W.button(foot, "Choose lines", 110, function() s:finish(true) end)
+  lines:SetPoint("RIGHT", done, "LEFT", -6, 0)
+  W.tooltip(lines, "Choose lines", "Go and pick which lines your character says, or add some of your own.")
+  local show = W.check(foot, "Open to this page at login", function(_, on) cdb().splash = on and true or false end)
+  show:SetPoint("RIGHT", lines, "LEFT", -150, 0)
+  s.show = show
+  -- first time through: finishing marks setup done and offers the lines
+  function s:finish(toLines)
+    local first = not cdb().setupDone
+    cdb().setupDone = true
+    if first then p("all set. Type /x any time to change things.") end
+    if toLines then
+      if ns.openSection then ns.openSection("lines") end
+    else
+      if ns.closeMain then ns.closeMain() end
+      if first and ns.showNextStep then pcall(ns.showNextStep) end
+    end
+  end
+
+  function s:refreshChoices(changed)
+    local c = cdb()
+    if not c.homeland then
+      local list = ns.homelands()
+      if list[1] then c.homeland = list[1][1] end
+    end
+    for _, dd in pairs(self.dds) do dd.refresh() end
+    for kind, hint in pairs(self.hints) do
+      local d = CROX2_DESCRIBE and CROX2_DESCRIBE[kind]
+      hint:SetText((d and c[kind] and d[c[kind]]) or SPLASH_HINTS[kind] or "")
+    end
+    if changed or not self.example:GetText() or self.example:GetText() == "" then self:rollExample(changed) end
+    self.chattyDD.refresh() self.raidDD.refresh() self.askDD.refresh() self.giveDD.refresh() self.trollDD.refresh()
+    local function est(level) local ch = ns.CHATTY[level] return ch and ("About " .. ch.est) or "" end
+    self.chattyHint:SetText(est(c.chatty or 3))
+    self.raidHint:SetText(est(c.raidChatty or 2))
+    self:layoutSpeak()
+    local pf = ns.profile
+    self.who:SetText(("%s · %s %s"):format(pf.name or "", pf.race or "", cap((pf.class or ""):lower())))
+    self.facts:SetText("Professions: " .. profText())
+    self.spec:SetText("Spec lines unlocked: " .. specText())
+    self.show:SetChecked(c.splash ~= false)
+  end
+  function s:refresh() self:refreshChoices() end
+  function s:layout(w)
+    self.grp:SetWidth(math.max(380, math.min(640, w - 40)))
+    local h = 6 + 54 + 6 + 18 + 12 + plate:GetHeight() + 8 + plate2:GetHeight() + 8 + plate3:GetHeight() + 8 + 14 + 8 + 30 + 16
+    self.height = h
+    return h
   end
   return s
 end
@@ -285,29 +453,9 @@ local function buildOptions(parent)
     return dd, l
   end
 
-  head("Speaking")
-  check("on", "cro/x on for this character", "The master switch for this character.")
-  s.chatty = dropdown("How chatty", "How many lines a minute to expect in a fight. Hushed is under 1, Quiet 1-2, Normal 2-4, Lively 4-6, Chatterbox 6-9. " ..
-    "These are rough: the real rate depends on how fast you press. In a party the shared party pace still applies.",
-    ns.chattyItems, function() return cdb().chatty end, function(v) cdb().chatty = v end, 190)
-  s.raidChatty = dropdown("In a raid", "How chatty in a raid, with the same five levels. Raids are noisy already, so this starts at Quiet. Outside a raid, How chatty applies.",
-    ns.chattyItems, function() return cdb().raidChatty or 2 end, function(v) cdb().raidChatty = v end, 190)
-  check("emotes", "Emotes", "Emotes stay a rare accent either way.")
-  check("yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies.")
-  head("Group")
-  check("cr", "Call and response", "Your character calls for help and answers other cro/x users in your group.")
-  local CR_LEVELS = function() return {{1, "Rarely"}, {2, "Sometimes"}, {3, "Often"}, {4, "Always"}} end
-  s.crAsk = dropdown("Ask for help", "How often your character calls for help (a debuff, low health, an enemy on you) when a cro/x partymate could answer. Always means every time it fits.",
-    CR_LEVELS, function() return cdb().crAsk or 4 end, function(v) cdb().crAsk = v end)
-  s.crGive = dropdown("Answer a call", "How often your character says something when they answer a call. They still help either way; Rarely just means they usually do it quietly.",
-    CR_LEVELS, function() return cdb().crGive or 4 end, function(v) cdb().crGive = v end)
-  check("turns", "Take turns with the party", "cro/x users in a party take turns instead of talking over each other. Turning it off only affects you.")
+  head("General")
+  check("on", "cro/x on for this character", "The master switch for this character. Everything about how it speaks is on the Setup page.")
   head("Content")
-  check("filter", "Profanity filter", "Real-world swear words are swapped for clean versions. Your own lines are never changed.")
-  s.troll, s.trollL = dropdown("Troll voice", "Trolls speak with the accent from the first alpha's converter. Emotes and your own lines stay as written.",
-    function() return {{"accent", "Accent"}, {"plain", "Plain"}} end, function() return cdb().troll end,
-    function(v) cdb().troll = v end)
-  s.trollY = y + 32
   local media = W.check(s, "Media references (a later build)", function(self)
     self:SetChecked(false)
     p("media references come in a later build.")
@@ -328,8 +476,6 @@ local function buildOptions(parent)
   W.tooltip(testBtn, "Why was it quiet?", "Prints, in your own chat only, the reasons your last few button presses stayed quiet. Same as /x test.")
   y = y - 32
   head("Window")
-  check("sound", "Window sounds", "The small clicks and chimes when cro/x windows open, close and change.")
-  check("splash", "Show the splash page at login", "The setup page when you log in. It stays open until you close it with Done or the X.")
   local slider = W.slider(s, "Text scale", 0.8, 1.4, 0.05, function() return cdb().textScale or 1 end,
     function(v) cdb().textScale = v if ns.relayout then ns.relayout() end end, function(v) return ("%d%%"):format(v * 100 + 0.5) end)
   slider:SetPoint("TOPLEFT", 18, y - 12)
@@ -344,7 +490,7 @@ local function buildOptions(parent)
   reset:SetPoint("TOPLEFT", 12, y - 4)
   local resetAll = W.button(s, "Reset cro/x...", 130, function() ns.confirmReset() end)
   resetAll:SetPoint("LEFT", reset, "RIGHT", 8, 0)
-  W.tooltip(resetAll, "Reset cro/x", "Puts every option and your character's choices back to the defaults and brings the splash page back to set up again. Your own phrases are kept. Same as /x reset.")
+  W.tooltip(resetAll, "Reset cro/x", "Puts every option and your character's choices back to the defaults and brings the Setup page back so you can set up again. Your own phrases are kept. Same as /x reset.")
   y = y - 34
   local ver = W.hint(s, ("cro_x %s · built %s · /x help for commands"):format(ns.BUILD, ns.BUILD_DATE))
   ver:SetPoint("TOPLEFT", 12, y - 4)
@@ -352,14 +498,6 @@ local function buildOptions(parent)
 
   function s:refresh()
     for key, c in pairs(checks) do c:SetChecked(cdb()[key] and true or false) end
-    self.chatty.refresh()
-    self.raidChatty.refresh()
-    self.crAsk.refresh()
-    self.crGive.refresh()
-    self.troll.refresh()
-    local troll = ns.isTroll()
-    self.troll:SetShown(troll)
-    self.trollL:SetShown(troll)
   end
   function s:layout() return height end
   return s
@@ -1036,7 +1174,7 @@ end
 ------------------------------------------------------------------------
 -- The main window
 ------------------------------------------------------------------------
-local SECTIONS = {{"character", "Character", buildCharacter}, {"options", "Options", buildOptions},
+local SECTIONS = {{"home", "Setup", buildHome}, {"options", "Options", buildOptions},
   {"phrases", "My phrases", buildPhrases}, {"lines", "Lines", buildLines}, {"credits", "Credits", buildCredits}}
 
 local hordePage, alliancePage, scrollFrame, scrollChild, listFrame
@@ -1202,7 +1340,7 @@ local function buildMain()
   -- size and place: remembered, or bottom right
   local wdb = cdb().window
   main:ClearAllPoints()
-  if wdb and wdb.w then
+  if wdb and wdb.w and wdb.w >= 700 and wdb.h >= 560 then
     main:SetSize(wdb.w, wdb.h)
     main:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", wdb.x, wdb.y)
   else
@@ -1210,11 +1348,21 @@ local function buildMain()
     main:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -80, 120)
   end
   main:HookScript("OnShow", function()
-    if sections[current or "character"] then showSection(current or "character") end
+    if sections[current or "home"] then showSection(current or "home") end
   end)
-  current = "character"
+  -- closing the window the first time (without pressing Done) still finishes setup and offers the lines
+  main:HookScript("OnHide", function()
+    if cdb() and not cdb().setupDone and not ns.isAlliance() then
+      cdb().setupDone = true
+      p("all set. Type /x any time to change things.")
+      if ns.showNextStep then pcall(ns.showNextStep) end
+    end
+  end)
+  current = "home"
   selectTab(1)
 end
+
+function ns.closeMain() if main and main:IsShown() then main:Hide() end end
 
 function ns.toggleMain()
   if ns.isAlliance() then ns.showAlliance() return end
@@ -1225,8 +1373,8 @@ end
 -- Reset: back to defaults, then the splash again so setup starts over
 local resetDlg
 function ns.doReset()
-  ns.resetAll()
   if main then main:Hide() end
+  ns.resetAll()
   if ns.resetWindow then pcall(ns.resetWindow) end
   pcall(ns.updateMinimap)
   p("reset to the defaults.")
@@ -1241,7 +1389,7 @@ function ns.confirmReset()
     page:SetPoint("BOTTOMRIGHT", -8, 8)
     ns.paintArea(page, "page", 0.55)
     local t = W.text(resetDlg, "This puts every cro/x option and your character's choices back to the defaults, " ..
-      "turns all lines back on, and brings the splash page back so you can set up again.", "GameFontHighlight")
+      "turns all lines back on, and brings the Setup page back so you can set up again.", "GameFontHighlight")
     t:SetPoint("TOPLEFT", 24, -44)
     t:SetWidth(392)
     t:SetWordWrap(true)
@@ -1255,7 +1403,7 @@ function ns.confirmReset()
   resetDlg:Show()
 end
 
--- open the main window on one section (character, options, phrases, lines, credits)
+-- open the main window on one section (home, options, phrases, lines, credits)
 function ns.openSection(key)
   if ns.isAlliance() then ns.showAlliance() return end
   if not main then buildMain() end
@@ -1320,7 +1468,7 @@ end
 ------------------------------------------------------------------------
 local function help()
   p("/x - open the window · /x flag - review a fight · /x export - copy your log · /x setup - redo setup")
-  p("/x splash - show the splash page · /x reset - start over · /x probe - what this client offers")
+  p("/x reset - start over · /x probe - what this client offers")
   p("/x bug - report a problem · /x test - why was that press quiet?")
   p("/x on · /x off · /x help")
 end
@@ -1335,7 +1483,7 @@ SlashCmdList["CROX"] = function(msg)
   elseif msg == "flag" then ns.Log.openReview()
   elseif msg == "export" then ns.Log.openExport()
   elseif msg == "setup" then ns.openSetup()
-  elseif msg == "splash" then ns.showSplash()
+  elseif msg == "splash" then ns.showSplash()   -- the old name
   elseif msg == "reset" then ns.confirmReset()
   elseif msg == "probe" then ns.Bug.probe()
   elseif msg == "bug" or msg == "report" then ns.Bug.open()
@@ -1370,7 +1518,6 @@ end
 ------------------------------------------------------------------------
 -- Splash page at login
 ------------------------------------------------------------------------
-local splash
 
 -- Shown once, right after setup is finished for the first time: look through the lines or add your own
 local nextStep
@@ -1400,253 +1547,12 @@ local function showNextStep()
 end
 ns.showNextStep = showNextStep
 
--- The splash is also the setup: the character's five choices are dropdowns here. The first time (setup not
--- done yet) it stays open until the player is finished; after that it still stays open until the player closes it.
-local SPLASH_HINTS = {
-  temperament = "How you talk in a fight",
-  homeland = "Where you're from",
-  upbringing = "How you were raised",
-  drive = "What you fight for",
-  pronouns = "Used in emotes",
-}
-
-function ns.showSplash(onDone)
+-- The setup page is the first section of the main window; these keep the old names working
+-- (/x setup, /x splash, "Redo setup", reset, and the login page).
+function ns.showSplash()
   if ns.isAlliance() then return end
-  if not splash then
-    local savedSize = ns.db and ns.db.splashSize
-    -- the same window frame as the main window: its title bar, crest and close button
-    splash = W.panel("CROX2SplashFrame", "Combat Roleplay Options - cro/x", math.max(620, savedSize and savedSize[1] or 700), math.max(720, savedSize and savedSize[2] or 760))
-    splash:ClearAllPoints()
-    splash:SetPoint("CENTER", 0, 40)
-    local crest = splash:CreateTexture(nil, "OVERLAY")
-    crest:SetTexture(W.HORDE_CREST)
-    crest:SetTexCoord(0, 0.62, 0, 0.62)
-    crest:SetSize(20, 20)
-    crest:SetPoint("TOPLEFT", 6, -2)
-    splash:SetResizable(true)
-    if splash.SetResizeBounds then splash:SetResizeBounds(620, 720, 1100, 1000)
-    elseif splash.SetMinResize then splash:SetMinResize(620, 720) splash:SetMaxResize(1100, 1000) end
-    local inner = CreateFrame("Frame", nil, splash)
-    inner:SetPoint("TOPLEFT", 8, -28)
-    inner:SetPoint("BOTTOMRIGHT", -8, 8)
-    posterBG(inner)
-    local dim = inner:CreateTexture(nil, "BACKGROUND", nil, 0)
-    dim:SetAllPoints()
-    dim:SetColorTexture(0, 0, 0, 0.3)
-    -- the title card above the choices
-    local card = CreateFrame("Frame", nil, splash)
-    card:SetPoint("TOPLEFT", inner, "TOPLEFT", 0, -10)
-    card:SetPoint("TOPRIGHT", inner, "TOPRIGHT", 0, -10)
-    card:SetHeight(54)
-    local ct = card:CreateTexture(nil, "BACKGROUND")
-    ct:SetAllPoints()
-    ct:SetColorTexture(0, 0, 0, 0.5)
-    for _, edge in ipairs({"TOP", "BOTTOM"}) do
-      local ln = card:CreateTexture(nil, "ARTWORK")
-      ln:SetPoint(edge .. "LEFT", 20, 0) ln:SetPoint(edge .. "RIGHT", -20, 0) ln:SetHeight(2)
-      ln:SetColorTexture(0.78, 0.6, 0.15, 0.9)
-    end
-    local title = card:CreateFontString(nil, "OVERLAY")
-    if not pcall(title.SetFont, title, "Fonts\\MORPHEUS.TTF", 34, "THICKOUTLINE") then title:SetFontObject("GameFontNormalHuge") end
-    title:SetTextColor(1, 0.82, 0)
-    title:SetText("Combat Roleplay Options")
-    title:SetPoint("CENTER", 0, 0)
-    splash.title = title
-    splash.who = W.text(splash, "", "GameFontHighlight")
-    splash.who:SetPoint("TOP", card, "BOTTOM", 0, -6)
-    -- the choices, on a dark plate so they read over the picture
-    local plate = CreateFrame("Frame", nil, splash)
-    plate:SetPoint("TOP", splash.who, "BOTTOM", 0, -12)
-    plate:SetPoint("LEFT", splash, "LEFT", 28, 0)
-    plate:SetPoint("RIGHT", splash, "RIGHT", -28, 0)
-    plate:SetHeight(40 + #CHOICES * 34 + 44)
-    local pt = plate:CreateTexture(nil, "BACKGROUND")
-    pt:SetAllPoints()
-    pt:SetColorTexture(0, 0, 0, 0.62)
-    local head = W.heading(plate, "Who are you?")
-    head:SetPoint("TOP", plate, "TOP", 0, -10)
-    -- the rows sit in one group that stays centered in the plate, however wide the window is
-    local grp = CreateFrame("Frame", nil, plate)
-    grp:SetSize(560, #CHOICES * 34)
-    grp:SetPoint("TOP", plate, "TOP", 0, -34)
-    splash.grp = grp
-    splash.dds, splash.hints = {}, {}
-    for i, ch in ipairs(CHOICES) do
-      local kind = ch[1]
-      local y = -(i - 1) * 34
-      local label = W.text(grp, ch[2], "GameFontNormal")
-      label:SetPoint("TOPLEFT", 0, y - 6)
-      local dd = W.dropdown(grp, 170, function() return choiceItems(kind) end, function() return cdb()[kind] end,
-        function(v) cdb()[kind] = v splash:refreshChoices(kind) end)
-      dd:SetPoint("TOPLEFT", 100, y + 2)
-      -- a line of flavor for whatever is picked, to the right of the dropdown
-      local hint = W.text(grp, "", "GameFontHighlightSmall")
-      hint:SetPoint("LEFT", dd, "RIGHT", -2, 2)
-      hint:SetPoint("RIGHT", grp, "RIGHT", 0, 0)
-      hint:SetHeight(30)
-      hint:SetWordWrap(true)
-      hint:SetJustifyV("MIDDLE")
-      splash.dds[kind] = dd
-      splash.hints[kind] = hint
-    end
-    -- an example line, directly below the dropdowns
-    local ex = W.text(plate, "", "GameFontHighlight")
-    ex:SetPoint("TOPLEFT", grp, "BOTTOMLEFT", 0, -8)
-    ex:SetPoint("RIGHT", grp, "RIGHT", -84, 0)
-    ex:SetHeight(32)
-    ex:SetWordWrap(true)
-    ex:SetJustifyV("TOP")
-    splash.example = ex
-    local another = W.button(plate, "Another", 76, function() splash:rollExample() end)
-    another:SetPoint("TOPRIGHT", grp, "BOTTOMRIGHT", 0, -6)
-    W.tooltip(another, "Another example", "Another line in your character's voice. Only you see this.")
-    function splash:rollExample(kind)
-      local pick = kind
-      if not pick or pick == "pronouns" then
-        local kinds = {"temperament", "homeland", "upbringing", "drive"}
-        pick = kinds[math.random(#kinds)]
-      end
-      local line = ns.sample(pick)
-      self.example:SetText(line and ("|cffffd100Example:|r \"" .. line .. "\"") or "")
-    end
-    -- how they speak: the pace, the group habits and the content switches, in a second plate
-    local plate2 = CreateFrame("Frame", nil, splash)
-    plate2:SetPoint("TOP", plate, "BOTTOM", 0, -8)
-    plate2:SetPoint("LEFT", splash, "LEFT", 28, 0)
-    plate2:SetPoint("RIGHT", splash, "RIGHT", -28, 0)
-    plate2:SetHeight(200)
-    local pt2 = plate2:CreateTexture(nil, "BACKGROUND")
-    pt2:SetAllPoints()
-    pt2:SetColorTexture(0, 0, 0, 0.62)
-    local head2 = W.heading(plate2, "How do you speak?")
-    head2:SetPoint("TOP", plate2, "TOP", 0, -10)
-    local grp2 = CreateFrame("Frame", nil, plate2)
-    grp2:SetSize(440, 150)
-    grp2:SetPoint("TOP", plate2, "TOP", 0, -34)
-    local PACE = ns.chattyItems
-    local function speakRow(i, text, hint, items, get, set)
-      local label = W.text(grp2, text, "GameFontNormal")
-      label:SetPoint("TOPLEFT", 0, -(i - 1) * 34 - 6)
-      local dd = W.dropdown(grp2, 170, items, get, set)
-      dd:SetPoint("TOPLEFT", 100, -(i - 1) * 34 + 2)
-      local h = W.text(grp2, hint, "GameFontDisableSmall")
-      h:SetPoint("LEFT", dd, "RIGHT", -6, 2)
-      return dd, label, h
-    end
-    local chattyDD, _, chattyHint = speakRow(1, "How chatty", "", PACE, function() return cdb().chatty end,
-      function(v) cdb().chatty = v splash:refreshChoices() end)
-    splash.chattyDD, splash.chattyHint = chattyDD, chattyHint
-    local raidDD, _, raidHint = speakRow(2, "In a raid", "", PACE, function() return cdb().raidChatty or 2 end,
-      function(v) cdb().raidChatty = v splash:refreshChoices() end)
-    splash.raidDD, splash.raidHint = raidDD, raidHint
-    local trollDD, trollL, trollH = speakRow(3, "Troll voice", "Accent or plain",
-      function() return {{"accent", "Accent"}, {"plain", "Plain"}} end, function() return cdb().troll end,
-      function(v) cdb().troll = v splash:refreshChoices() end)
-    splash.trollDD, splash.trollL, splash.trollH = trollDD, trollL, trollH
-    local SWITCHES = {
-      {"emotes", "Emotes", "Emotes stay a rare accent either way."},
-      {"yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies."},
-      {"cr", "Call and response", "Your character calls for help and answers other cro/x users in your group."},
-      {"turns", "Take turns with the party", "cro/x users in a party take turns instead of talking over each other."},
-      {"filter", "Profanity filter", "Real-world swear words are swapped for clean versions."},
-      {"sound", "Window sounds", "The small clicks and chimes when cro/x windows open and close."},
-    }
-    splash.switches = {}
-    for i, sw in ipairs(SWITCHES) do
-      local key = sw[1]
-      local c = W.check(grp2, sw[2], function(_, on) cdb()[key] = on and true or false if ns.refreshUI then ns.refreshUI() end end)
-      W.tooltip(c, sw[2], sw[3])
-      splash.switches[key] = c
-      c._index = i
-    end
-    -- the troll row only exists for a troll; everything below moves up when it isn't there
-    function splash:layoutSpeak()
-      local troll = ns.isTroll()
-      trollDD:SetShown(troll) trollL:SetShown(troll) trollH:SetShown(troll)
-      local top = (troll and 3 or 2) * 34 + 4
-      for key, c in pairs(self.switches) do
-        local i = c._index
-        c:ClearAllPoints()
-        c:SetPoint("TOPLEFT", ((i - 1) % 2) * 220, -top - math.floor((i - 1) / 2) * 26)
-        c:SetChecked(cdb()[key] ~= false and cdb()[key] ~= nil)
-      end
-      local gh = top + 3 * 26 + 4
-      grp2:SetHeight(gh)
-      plate2:SetHeight(34 + gh + 10)
-    end
-    local tip = W.hint(splash, "Type /x to open  ·  /x flag to review a fight  ·  change these any time in Options")
-    tip:SetPoint("TOP", plate2, "BOTTOM", 0, -8)
-    local ver = W.hint(splash, ns.BUILD)
-    ver:SetPoint("BOTTOMLEFT", 22, 20)
-    local done = W.button(splash, "Done", 90, function() splash:Hide() end)
-    done:SetPoint("BOTTOMRIGHT", -24, 46)
-    local open = W.button(splash, "Use cro/x", 110, function() splash.opened = true splash:Hide() if ns.toggleMain then ns.toggleMain() end end)
-    open:SetPoint("RIGHT", done, "LEFT", -6, 0)
-    -- yellow Blizzard checkbox, bottom right of the picture; unchecking stops the splash at login
-    local show = W.check(splash, "Show at login", function(_, on) cdb().splash = on and true or false end)
-    show:SetPoint("BOTTOMRIGHT", -110, 18)
-    splash.show = show
-    local function fitGroup()
-      local w = splash:GetWidth() or 700
-      grp:SetWidth(math.max(460, math.min(640, w - 80)))
-    end
-    splash:HookScript("OnSizeChanged", fitGroup)
-    fitGroup()
-    -- drag the corner to resize; the picture stays whole and the size is remembered
-    local grip = CreateFrame("Button", nil, splash)
-    grip:SetSize(16, 16)
-    grip:SetPoint("BOTTOMRIGHT", -6, 6)
-    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-    grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-    grip:SetScript("OnMouseDown", function() splash.sizing = true splash:StartSizing("BOTTOMRIGHT") end)
-    grip:SetScript("OnMouseUp", function()
-      splash.sizing = nil
-      splash:StopMovingOrSizing()
-      if ns.db then ns.db.splashSize = {math.floor(splash:GetWidth() + 0.5), math.floor(splash:GetHeight() + 0.5)} end
-    end)
-    function splash:refreshChoices(changed)
-      local c = cdb()
-      if not c.homeland then
-        local list = ns.homelands()
-        if list[1] then c.homeland = list[1][1] end
-      end
-      for _, dd in pairs(self.dds) do dd.refresh() end
-      for kind, hint in pairs(self.hints) do
-        local d = CROX2_DESCRIBE and CROX2_DESCRIBE[kind]
-        hint:SetText((d and c[kind] and d[c[kind]]) or SPLASH_HINTS[kind] or "")
-      end
-      if changed or not self.example:GetText() or self.example:GetText() == "" then self:rollExample(changed) end
-      self.chattyDD.refresh() self.raidDD.refresh() self.trollDD.refresh()
-      local function est(level) local ch = ns.CHATTY[level] return ch and ("About " .. ch.est) or "" end
-      self.chattyHint:SetText(est(c.chatty or 3))
-      self.raidHint:SetText(est(c.raidChatty or 2))
-      self:layoutSpeak()
-      local home
-      for _, h in ipairs(ns.homelands()) do if h[1] == c.homeland then home = h[2] end end
-      self.who:SetText(("%s · %s %s"):format(ns.profile.name or "", ns.profile.race or "", cap(ns.profile.class or "")))
-      if ns.refreshUI then ns.refreshUI() end
-    end
-    splash:SetScript("OnHide", function(self)
-      if CloseDropDownMenus then pcall(CloseDropDownMenus) end
-      if not cdb().setupDone then
-        cdb().setupDone = true
-        p("all set. Type /x any time to change things.")
-        if not self.opened then pcall(showNextStep) end
-      end
-      self.opened = nil
-      local cb = self.onDone
-      self.onDone = nil
-      if cb then cb() end
-    end)
-  end
-  splash:refreshChoices()
-  splash.show:SetChecked(cdb().splash ~= false)
-  splash.onDone = onDone
-  splash:Show()
-  if UIFrameFadeIn then pcall(UIFrameFadeIn, splash, 0.6, 0, 1) end
+  ns.openSection("home")
 end
--- /x setup and "Redo setup" bring the same page back
 function ns.openSetup() ns.showSplash() end
 
 local ev = CreateFrame("Frame")
@@ -1654,7 +1560,7 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
   pcall(ns.updateMinimap)
   if not ns.cdb or ns.isAlliance() or not ns.cdb.on then return end
-  -- first run always shows it (that's where the choices are made); after that, only if "Show at login" is on
+  -- first run always opens it (that's where the choices are made); after that, only if "Open to this page at login" is on
   if ns.cdb.splash or not ns.cdb.setupDone then
     C_Timer.After(1.5, function() pcall(ns.showSplash) end)
   end

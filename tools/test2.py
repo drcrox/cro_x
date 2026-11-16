@@ -114,13 +114,13 @@ check("unknown mark is false", not mt("something", c3))
 # --- 10. UI: build and show every section, narrow and wide
 ns.toggleMain()
 main = G.CROX2MainFrame
-for key in ["character", "options", "phrases", "lines"]:
+for key in ["home", "options", "phrases", "lines"]:
     btn = None
     lua.execute('''local ns = ...''')
 import itertools
 show = lua.eval('''function(ns, H)
   local out = {}
-  for _, k in ipairs({"character", "options", "phrases", "lines"}) do
+  for _, k in ipairs({"home", "options", "phrases", "lines"}) do
     local ok, e = pcall(function()
       for _, f in ipairs(H.frames) do end
     end)
@@ -131,7 +131,7 @@ clicks = lua.eval('''function(H)
   local done = {}
   for _, f in ipairs(H.frames) do
     local tx = rawget(f, "text")
-    if type(tx) == "table" and (tx._text == "Character" or tx._text == "Options" or tx._text == "My phrases" or tx._text == "Lines" or tx._text == "Credits") then
+    if type(tx) == "table" and (tx._text == "Setup" or tx._text == "Options" or tx._text == "My phrases" or tx._text == "Lines" or tx._text == "Credits") then
       f:Click()
       done[#done + 1] = tx._text
       main = CROX2MainFrame
@@ -140,7 +140,7 @@ clicks = lua.eval('''function(H)
     end
   end
   return table.concat(done, ",") end''')
-r = clicks(H); check("all four sections open at two sizes", r == "Character,Options,My phrases,Lines,Credits", r)
+r = clicks(H); check("all four sections open at two sizes", r == "Setup,Options,My phrases,Lines,Credits", r)
 # --- lines tab: shows every line by default, tick boxes to combine sets
 lt = lua.eval('''function(ns)
   local s = ns._sections.lines
@@ -180,7 +180,7 @@ tab2.Click(tab2)
 check("alliance tab opens", True)
 G.CROX2MainFrameTab1.Click(G.CROX2MainFrameTab1)
 # setup, review, export, alliance screen
-ns.openSetup(); check("setup (the splash) opens", G.CROX2SplashFrame._shown)
+ns.openSetup(); check("setup opens the main window on the Setup page", G.CROX2MainFrame._shown)
 ns.Log.openReview(); check("fight review opens", G.CROX2ReviewFrame._shown)
 ns.Log.openExport(); check("export opens", G.CROX2ExportFrame._shown)
 txt = ns.Log.exportText()
@@ -206,28 +206,13 @@ for i in range(20): press(2); H.tick(2)
 check("alliance character never speaks", nsent() == n0)
 print("errors in chat:", [m for m in H.chat.values() if "error" in m.lower()])
 H.me.faction = "Horde"; ns.refreshProfile()
-ns.showSplash(); check("splash opens", G.CROX2SplashFrame._shown)
+ns.showSplash(); check("setup page opens in the main window", G.CROX2MainFrame._shown)
 check("no art picker", ns.openArtPicker is None and G.CROX2ArtFrame is None)
 H.tick(60)
-check("splash carries the addon header and the title card", G.CROX2SplashFrame.title._text == "Combat Roleplay Options" and lua.eval('function(H) for _, f in ipairs(H.frames) do if f._text == "Combat Roleplay Options - cro/x" then return true end end return false end')(H), None)
-r = lua.eval('function() local f = CROX2SplashFrame f:SetSize(900, 700) local sc = f._scripts and f._scripts.OnSizeChanged if sc then sc[1](f) end return f:GetWidth() end')()
-check("splash can be resized", r == 900 and G.CROX2SplashFrame.IsShown is not None, r)
-G.CROX2SplashFrame.SetSize(G.CROX2SplashFrame, 700, 760)
-check("splash stays open until the player closes it", G.CROX2SplashFrame._shown)
-G.CROX2SplashFrame.Hide(G.CROX2SplashFrame)
-check("splash closes when told to", not G.CROX2SplashFrame._shown)
-r = lua.eval('''function(ns)
-  ns.showSplash()
-  local cb = CROX2SplashFrame and nil
-  return ns.cdb.splash end''')(ns)
-check("splash shows with the login checkbox on", r == True, r)
-r = lua.eval('''function(ns)
-  local f = CROX2SplashFrame
-  for _, c in ipairs(f._children or {}) do end
-  ns.cdb.splash = false ns.showSplash()
-  local v = ns.cdb.splash ns.cdb.splash = true
-  return v end''')(ns)
-check("splash re-open leaves the toggle alone", r == False, r)
+check("splash carries the addon header and the title card", lua.eval("function(ns) return ns._sections.home.title._text end")(ns) == "Combat Roleplay Options" and lua.eval('function(H) for _, f in ipairs(H.frames) do if f._text == "Combat Roleplay Options - cro/x" then return true end end return false end')(H), None)
+check("setup page stays open until the player closes it", G.CROX2MainFrame._shown)
+G.CROX2MainFrame.Hide(G.CROX2MainFrame)
+check("setup closes when told to", not G.CROX2MainFrame._shown)
 G.SlashCmdList.CROX("art")
 check("/x art does nothing now", G.CROX2ArtFrame is None)
 
@@ -243,7 +228,7 @@ r = lua.eval('''function(ns)
   out.raid = ns.chattyNow()
   IsInRaid = save
   ns.showSplash()
-  local sp = CROX2SplashFrame
+  local sp = ns._sections.home
   out.hasSwitches = sp.switches.emotes ~= nil and sp.switches.yell ~= nil and sp.switches.cr ~= nil and sp.switches.turns ~= nil
     and sp.switches.filter ~= nil and sp.switches.sound ~= nil
   sp.switches.yell:SetChecked(false); sp.switches.yell:Click()
@@ -276,7 +261,7 @@ r = lua.eval('''function(ns)
   out.missing = table.concat(out.missing, ",")
   ns.cdb.temperament = "cocky"
   ns.showSplash()
-  local sp = CROX2SplashFrame
+  local sp = ns._sections.home
   sp:refreshChoices("temperament")
   out.hint = sp.hints.temperament._text
   out.example = sp.example._text
@@ -351,17 +336,17 @@ check("a rally is logged as an exchange with its slots", last.id == "Krakka-7" a
 
 # --- setup lives on the splash
 r = lua.eval('''function(ns)
-  CROX2SplashFrame:Hide()
+  CROX2MainFrame:Hide()
   ns.cdb.setupDone = false
   ns.cdb.temperament = nil
   ns.showSplash()
-  local f = CROX2SplashFrame
+  local f = ns._sections.home
   local stays = f:IsShown()                      -- it never closes by itself
   local items = ns.choiceItems("temperament")
   ns.cdb.temperament = items[2][1]
   f:refreshChoices()
   local hasDD = f.dds.temperament ~= nil and f.dds.homeland ~= nil and f.dds.upbringing ~= nil and f.dds.drive ~= nil and f.dds.pronouns ~= nil
-  f:Hide()
+  CROX2MainFrame:Hide()
   return {stays = stays, dd = hasDD, done = ns.cdb.setupDone, temp = ns.cdb.temperament == items[2][1]}
 end''')(ns)
 check("first run: splash stays open with all five dropdowns", r["stays"] and r["dd"])
@@ -369,14 +354,14 @@ check("closing the splash finishes setup and keeps the choices", r["done"] and r
 
 # --- after the first setup: choose lines or add your own
 r = lua.eval('''function(ns)
-  CROX2SplashFrame:Hide()
+  CROX2MainFrame:Hide() if CROX2NextFrame then CROX2NextFrame:Hide() end
   ns.cdb.setupDone = false
   ns.showSplash()
-  CROX2SplashFrame:Hide()
+  CROX2MainFrame:Hide()
   local shown = CROX2NextFrame and CROX2NextFrame:IsShown()
   ns.cdb.setupDone = true
   CROX2NextFrame:Hide()
-  ns.showSplash() CROX2SplashFrame:Hide()
+  ns.showSplash() CROX2MainFrame:Hide()
   local again = CROX2NextFrame:IsShown()
   ns.openSection("phrases")
   return {shown = shown, again = again, main = CROX2MainFrame and CROX2MainFrame:IsShown()}
@@ -403,10 +388,10 @@ check("reset restores defaults", r["chatty"] == 3 and r["temp"] == "gruff" and r
 check("reset keeps your own phrases", r["custom"] == 1)
 G.SlashCmdList.CROX("reset"); check("/x reset opens the confirm", G.CROX2ResetFrame._shown)
 r = lua.eval('''function(ns)
-  CROX2SplashFrame:Hide() CROX2NextFrame:Hide()
+  CROX2MainFrame:Hide() CROX2NextFrame:Hide()
   ns.cdb.chatty = 5 ns.cdb.setupDone = true
   ns.doReset()
-  return {splash = CROX2SplashFrame:IsShown(), chatty = ns.cdb.chatty, done = ns.cdb.setupDone}
+  return {splash = CROX2MainFrame:IsShown(), chatty = ns.cdb.chatty, done = ns.cdb.setupDone}
 end''')(ns)
 check("reset brings the splash back for setup", r["splash"] and r["chatty"] == 3 and r["done"] == False, r)
 
