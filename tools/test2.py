@@ -141,6 +141,33 @@ clicks = lua.eval('''function(H)
   end
   return table.concat(done, ",") end''')
 r = clicks(H); check("all four sections open at two sizes", r == "Character,Options,My phrases,Lines,Credits", r)
+# --- lines tab: shows every line by default, tick boxes to combine sets
+lt = lua.eval('''function(ns)
+  local s = ns._sections.lines
+  local st = s._state
+  local function count() s:refresh() local n = 0 for _, r in ipairs(s.rows) do if r:IsShown() then n = n + 1 end end
+    return s.count._text or "" end
+  local out = {}
+  out.default = count()
+  out.defaultMoments = next(st.moments) == nil and next(st.sources) == nil and st.onlyMine == false
+  st.limit = 100000
+  st.moments = {opener = true}; out.opener = count()
+  st.moments = {opener = true, heavy = true}; out.two = count()
+  st.moments = {}; st.sources = {class = true}; out.class = count()
+  st.sources = {class = true, spec = true}; out.classSpec = count()
+  st.moments = {kill = true}; st.sources = {base = true}; out.killBase = count()
+  st.moments = {}; st.sources = {}; st.search = "zzzzqq"; out.none = count()
+  st.search = ""; st.open = true; s:refresh(); out.openOk = true
+  st.open = false; st.limit = 100; s:refresh()
+  return out end''')(ns)
+def n_of(t): return int(str(t).split(" ")[0])
+check("lines tab starts with every moment, every source and nothing hidden", lt["defaultMoments"], lt["default"])
+check("lines tab default shows the whole set", n_of(lt["default"]) > n_of(lt["opener"]) > 0, (lt["default"], lt["opener"]))
+check("two moments combine (more than one, fewer than all)", n_of(lt["two"]) > n_of(lt["opener"]) and n_of(lt["two"]) < n_of(lt["default"]), (lt["opener"], lt["two"]))
+check("two sources combine", n_of(lt["classSpec"]) > n_of(lt["class"]) > 0, (lt["class"], lt["classSpec"]))
+check("moment and source filters combine", 0 < n_of(lt["killBase"]) < n_of(lt["default"]), lt["killBase"])
+check("search with no match shows none; panel opens", n_of(lt["none"]) == 0 and lt["openOk"], lt["none"])
+
 # tabs
 tab2 = G.CROX2MainFrameTab2
 tab2.Click(tab2)

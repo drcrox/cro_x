@@ -654,34 +654,103 @@ local function canSay(o)
   return true
 end
 
+-- which kind of source a line comes from, for the source checkboxes
+local SOURCE_LIST = {
+  {"base", "Baseline"}, {"drive", "Tag: drive"}, {"up", "Tag: upbringing"}, {"home", "Tag: homeland"},
+  {"class", "Tag: class"}, {"spec", "Spec lines"}, {"prof", "Professions"}, {"cr", "Call and response"},
+  {"dmg", "Damage types"}, {"profemote", "Profession emotes"}, {"own", "My own lines"},
+}
+local function sourceKind(o)
+  if o.own then return "own" end
+  if o.cls then return "spec" end
+  local id = o.id
+  if id:find("^tag:drive:") then return "drive" end
+  if id:find("^tag:up:") then return "up" end
+  if id:find("^tag:home:") then return "home" end
+  if id:find("^tag:class:") then return "class" end
+  if id:find("^tag:prof:") then return "prof" end
+  if id:find("^cr:") then return "cr" end
+  if id:find("^dmg:") then return "dmg" end
+  if id:find("^profemote:") then return "profemote" end
+  return "base"
+end
+
+local function countKeys(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+
 local function buildLines(parent)
   local s = CreateFrame("Frame", nil, parent)
-  local state = {moment = "opener", source = "all", search = "", onlyMine = true}
+  -- empty moments / sources = everything; ticking some narrows to just those, in any combination
+  local state = {moments = {}, sources = {}, search = "", onlyMine = false, limit = 100, open = false}
   local momentItems = {}
   for _, l in ipairs({ARCH_LIST, MOMENT_LIST, EXTRA_LIST}) do for _, it in ipairs(l) do momentItems[#momentItems + 1] = it end end
-  local mdd = W.dropdown(s, 150, function() return momentItems end, function() return state.moment end,
-    function(v) state.moment = v s:refresh() if ns.relayout then ns.relayout() end end)
-  mdd:SetPoint("TOPLEFT", -12, 0)
-  local sdd = W.dropdown(s, 110, function() return {{"all", "All sources"}, {"base", "Baseline"}, {"tag", "Tags and spec"},
-    {"prof", "Professions"}, {"own", "My phrases"}} end, function() return state.source end,
-    function(v) state.source = v s:refresh() if ns.relayout then ns.relayout() end end)
-  sdd:SetPoint("LEFT", mdd, "RIGHT", -24, 0)
-  local search = W.edit(s, 150)
-  search:SetPoint("LEFT", sdd, "RIGHT", -4, 2)
+  local function changed() state.limit = 100 s:refresh() if ns.relayout then ns.relayout() end end
+
+  -- the set chooser
+  local toggle = W.button(s, "", 250, function() state.open = not state.open changed() end)
+  toggle:SetPoint("TOPLEFT", 4, 0)
+  W.tooltip(toggle, "Choose sets of lines", "Opens checkboxes for moments (opener, kill, potions...) and sources (baseline, class, drive, spec...). " ..
+    "Tick as many as you like, in any combination. With nothing ticked, every line shows.")
+  local search = W.edit(s, 170)
+  search:SetPoint("LEFT", toggle, "RIGHT", 14, 0)
   local ph = W.hint(search, "Search lines")
   ph:SetPoint("LEFT", 2, 0)
   search:SetScript("OnTextChanged", function(self)
     state.search = (self:GetText() or ""):lower()
     ph:SetShown(state.search == "")
-    s:refresh()
-    if ns.relayout then ns.relayout() end
+    changed()
   end)
-  local only = W.check(s, "Only lines this character can say", function(_, on) state.onlyMine = on s:refresh() if ns.relayout then ns.relayout() end end)
-  only:SetPoint("TOPLEFT", 6, -32)
-  only:SetChecked(true)
-  W.tooltip(only, "Only lines this character can say", "Hides lines your temperament, race, class or tags rule out. Untick to see everything.")
+  local only = W.check(s, "Only lines this character can say", function(_, on) state.onlyMine = on changed() end)
+  only:SetPoint("TOPLEFT", 2, -28)
+  only:SetChecked(false)
+  W.tooltip(only, "Only lines this character can say", "Hides lines your temperament, race, class or tags rule out. Off by default, so you can see every line.")
+
+  local panel = CreateFrame("Frame", nil, s)
+  panel:Hide()
+  panel.mHead = W.heading(panel, "Moments")
+  panel.sHead = W.heading(panel, "Sources and tags")
+  panel.mBoxes, panel.sBoxes = {}, {}
+  for _, it in ipairs(momentItems) do
+    local key = it[1]
+    local c = W.check(panel, it[2], function(_, on) state.moments[key] = on or nil changed() end)
+    panel.mBoxes[#panel.mBoxes + 1] = c
+  end
+  for _, it in ipairs(SOURCE_LIST) do
+    local key = it[1]
+    local c = W.check(panel, it[2], function(_, on) state.sources[key] = on or nil changed() end)
+    panel.sBoxes[#panel.sBoxes + 1] = c
+  end
+  panel.clear = W.button(panel, "Clear ticks (show all)", 170, function()
+    state.moments, state.sources = {}, {}
+    for _, c in ipairs(panel.mBoxes) do c:SetChecked(false) end
+    for _, c in ipairs(panel.sBoxes) do c:SetChecked(false) end
+    changed()
+  end)
+
+  -- lay the checkboxes out in columns for the current width; returns the panel's height
+  local COLW, ROWH = 170, 24
+  local function placePanel(w)
+    local cols = math.max(1, math.floor((w - 16) / COLW))
+    local y = 0
+    panel.mHead:ClearAllPoints() panel.mHead:SetPoint("TOPLEFT", 4, y)
+    y = y - 22
+    for i, c in ipairs(panel.mBoxes) do
+      c:ClearAllPoints()
+      c:SetPoint("TOPLEFT", ((i - 1) % cols) * COLW, y - math.floor((i - 1) / cols) * ROWH)
+    end
+    y = y - math.ceil(#panel.mBoxes / cols) * ROWH - 8
+    panel.sHead:ClearAllPoints() panel.sHead:SetPoint("TOPLEFT", 4, y)
+    y = y - 22
+    for i, c in ipairs(panel.sBoxes) do
+      c:ClearAllPoints()
+      c:SetPoint("TOPLEFT", ((i - 1) % cols) * COLW, y - math.floor((i - 1) / cols) * ROWH)
+    end
+    y = y - math.ceil(#panel.sBoxes / cols) * ROWH - 6
+    panel.clear:ClearAllPoints() panel.clear:SetPoint("TOPLEFT", 4, y)
+    y = y - 30
+    return -y
+  end
+
   s.count = W.heading(s, "")
-  s.count:SetPoint("TOPLEFT", 8, -62)
   s.rows = {}
   local allOn = W.button(s, "Turn all back on", 140, function()
     for k in pairs(cdb().off) do cdb().off[k] = nil end
@@ -689,6 +758,8 @@ local function buildLines(parent)
   end)
   W.tooltip(allOn, "Turn all back on", "Every line you switched off for this character comes back.")
   s.allOn = allOn
+  local moreBtn = W.button(s, "Show 100 more", 140, function() state.limit = state.limit + 100 s:refresh() if ns.relayout then ns.relayout() end end)
+  s.moreBtn = moreBtn
 
   local function rowFor(i)
     if s.rows[i] then return s.rows[i] end
@@ -708,24 +779,54 @@ local function buildLines(parent)
     return r
   end
 
-  local MAX_ROWS = 120
+  -- every line for the ticked moments (all of them when none are ticked), each line once
+  local function gather()
+    local keys, any = {}, next(state.moments) ~= nil
+    for _, it in ipairs(momentItems) do if not any or state.moments[it[1]] then keys[#keys + 1] = it[1] end end
+    local out, seen = {}, {}
+    for _, m in ipairs(keys) do
+      for _, o in ipairs(linesFor(m)) do
+        local prior = seen[o.id]
+        if prior then
+          prior.mlist[#prior.mlist + 1] = momentLabel(m)
+        else
+          o.mlist = {m:find("^x:") and "" or momentLabel(m)}
+          seen[o.id] = o
+          out[#out + 1] = o
+        end
+      end
+    end
+    return out
+  end
+
   function s:refresh()
-    mdd.refresh() sdd.refresh()
-    local list = linesFor(state.moment)
+    local w = self.w or 560
+    toggle:SetText(("%s  Sets: %s · %s"):format(state.open and "v" or ">",
+      next(state.moments) and (countKeys(state.moments) .. " moment" .. (countKeys(state.moments) == 1 and "" or "s")) or "all moments",
+      next(state.sources) and (countKeys(state.sources) .. " source" .. (countKeys(state.sources) == 1 and "" or "s")) or "all sources"))
+    local panelH = 0
+    if state.open then
+      panelH = placePanel(w)
+      panel:ClearAllPoints()
+      panel:SetPoint("TOPLEFT", 4, -56)
+      panel:SetPoint("RIGHT", self, "RIGHT", -4, 0)
+      panel:SetHeight(panelH)
+      panel:Show()
+    else panel:Hide() end
     local shown = {}
-    for _, o in ipairs(list) do
-      local src = o.src
-      local okSrc = state.source == "all" or (state.source == "base" and (src:find("^Baseline") or src:find("^Call") or src:find("^Damage")))
-        or (state.source == "tag" and (src:find("^Tag") or src:find("^Spec"))) or (state.source == "prof" and src:find("^Profession"))
-        or (state.source == "own" and o.own)
+    for _, o in ipairs(gather()) do
+      local okSrc = not next(state.sources) or state.sources[sourceKind(o)]
       local okSearch = state.search == "" or o.line.t:lower():find(state.search, 1, true)
       if okSrc and okSearch and (not state.onlyMine or canSay(o)) then shown[#shown + 1] = o end
     end
-    self.count:SetText(("%s · %d line%s%s"):format(momentLabel(state.moment), #shown, #shown == 1 and "" or "s",
+    self.count:SetText(("%d line%s%s"):format(#shown, #shown == 1 and "" or "s",
       state.onlyMine and " your character can say" or ""))
+    self.count:ClearAllPoints()
+    self.count:SetPoint("TOPLEFT", 8, -58 - (state.open and panelH + 6 or 0))
     for _, r in ipairs(self.rows) do r:Hide() end
-    local y = -84
-    for i = 1, math.min(#shown, MAX_ROWS) do
+    local y = -82 - (state.open and panelH + 6 or 0)
+    local limit = math.min(#shown, state.limit)
+    for i = 1, limit do
       local o = shown[i]
       local r = rowFor(i)
       r:ClearAllPoints()
@@ -736,6 +837,8 @@ local function buildLines(parent)
       if cdb().filter and o.line.c then text = o.line.c end
       r.txt:SetText(off and ("|cff808080" .. text .. "|r") or text)
       local tags = {}
+      local ml = table.concat(o.mlist or {}, ", ")
+      if ml ~= "" then tags[#tags + 1] = ml end
       if o.line.o then tags[#tags + 1] = o.line.o .. " only" end
       if o.line.r then tags[#tags + 1] = "rating " .. o.line.r end
       local n = cdb().said[o.id] or 0
@@ -754,22 +857,24 @@ local function buildLines(parent)
       r:Show()
       y = y - 38
     end
-    if #shown > MAX_ROWS then
-      self.more = self.more or W.hint(self, "")
-      self.more:SetText(("%d more - search or pick a source to narrow it down."):format(#shown - MAX_ROWS))
-      self.more:ClearAllPoints()
-      self.more:SetPoint("TOPLEFT", 8, y)
-      self.more:Show()
-      y = y - 20
-    elseif self.more then self.more:Hide() end
+    if #shown > limit then
+      self.moreBtn:SetText(("Show %d more (%d left)"):format(math.min(100, #shown - limit), #shown - limit))
+      self.moreBtn:SetWidth(200)
+      self.moreBtn:ClearAllPoints()
+      self.moreBtn:SetPoint("TOPLEFT", 8, y - 4)
+      self.moreBtn:Show()
+      y = y - 30
+    else self.moreBtn:Hide() end
     self.allOn:ClearAllPoints()
     self.allOn:SetPoint("TOPLEFT", 8, y - 8)
     self.height = -y + 44
   end
   function s:layout(w)
     for _, r in ipairs(self.rows) do r.txt:SetWidth(w - 100) r.sub:SetWidth(w - 100) end
+    if self.w ~= w then self.w = w if state.open then self:refresh() end end
     return self.height or 200
   end
+  s._state = state
   return s
 end
 
@@ -962,6 +1067,7 @@ local function buildMain()
   end
   scrollFrame, scrollChild = W.scroll(hordePage)
   sections = {}
+  ns._sections = sections
   for _, sd in ipairs(SECTIONS) do
     local s = sd[3](scrollChild)
     s:Hide()

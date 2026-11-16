@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.14 · 2026-11-15
+- Lines tab: shows everything by default, tick boxes combine moments and sources
+
 ## 0.57-alpha2.13 · 2026-11-15
 - spec read from the single Forever talent tree by column and row
 
