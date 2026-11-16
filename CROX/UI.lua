@@ -793,7 +793,7 @@ local function linesFor(moment)
 end
 
 -- can this character ever say the line? (temperament, race, class and tags; situational facts ignored)
-local function canSay(o)
+local function canSay(o, ignoreSpec)
   local line = o.line
   if o.own then return o.own.on ~= false end
   if line.o and line.o ~= cdb().temperament then return false end
@@ -818,6 +818,7 @@ local function canSay(o)
   end
   if o.cls then
     if o.cls ~= pf.class then return false end
+    if ignoreSpec then return true end
     return ((pf.spec or {})[o.tree] or 0) >= (o.band or 1)
   end
   if id:find("^summon:") then return pf.class == "WARLOCK" end
@@ -1084,13 +1085,20 @@ local function buildLines(parent)
       end
       return short, full
     end
-    local shown = {}
+    local shown, locked = {}, {}
     for _, o in ipairs(gather()) do
+      o.locked = nil
       local okSrc = not next(state.sources) or state.sources[sourceKind(o)]
       local okSearch = state.search == "" or o.line.t:lower():find(state.search, 1, true)
-      if okSrc and okSearch and canSay(o) then shown[#shown + 1] = o end
+      if okSrc and okSearch then
+        if canSay(o) then shown[#shown + 1] = o
+        elseif o.cls and canSay(o, true) then o.locked = true locked[#locked + 1] = o end    -- a spec line you could unlock
+      end
     end
-    self.count:SetText(("%d line%s your character can say"):format(#shown, #shown == 1 and "" or "s"))
+    local sayable = #shown
+    for _, o in ipairs(locked) do shown[#shown + 1] = o end      -- locked ones come last
+    self.count:SetText(("%d line%s your character can say%s"):format(sayable, sayable == 1 and "" or "s",
+      #locked > 0 and (" · " .. #locked .. " more to unlock") or ""))
     self.count:ClearAllPoints()
     self.count:SetPoint("TOPLEFT", 8, -32)
     for _, r in ipairs(self.rows) do r:Hide() end
@@ -1102,10 +1110,10 @@ local function buildLines(parent)
       r:ClearAllPoints()
       r:SetPoint("TOPLEFT", 4, y)
       r:SetPoint("RIGHT", self, "RIGHT", -4, 0)
-      local off = cdb().off[o.id] == true
+      local off = (not o.locked) and cdb().off[o.id] == true
       local text = o.line.e and ((ns.profile.name or "") .. " " .. o.line.t) or o.line.t
       if cdb().filter and o.line.c then text = o.line.c end
-      r.txt:SetText(off and ("|cff808080" .. text .. "|r") or text)
+      r.txt:SetText((off or o.locked) and ("|cff808080" .. text .. "|r") or text)
       local tags = {}
       local ml = table.concat(o.mlist or {}, ", ")
       if ml ~= "" then tags[#tags + 1] = ml end
@@ -1113,13 +1121,16 @@ local function buildLines(parent)
       if o.line.r then tags[#tags + 1] = "rating " .. o.line.r end
       local n = cdb().said[o.id] or 0
       r.sub:SetText(("%s%s · %s"):format(o.src, #tags > 0 and (" · " .. table.concat(tags, ", ")) or "",
-        off and "switched off" or ("said " .. n .. " time" .. (n == 1 and "" or "s"))))
+        o.locked and ("|cffcc9933locked|r - unlocks as you spend more talent points in " .. (o.tree or "this tree"))
+          or (off and "switched off" or ("said " .. n .. " time" .. (n == 1 and "" or "s")))))
       local tshort, tfull = trigger(o)
       if o.own then tshort, tfull = "", "" end
       r.trig:SetText(tshort ~= "" and ("Can trigger on: " .. tshort) or "")
       r.trigFull = tfull
-      r.check:SetChecked(not off)
+      r.check:SetChecked(not off and not o.locked)
+      if r.check.SetEnabled then r.check:SetEnabled(not o.locked) end
       r.check:SetScript("OnClick", function(self)
+        if o.locked then self:SetChecked(false) return end      -- a locked line can be seen, never switched on
         if o.own then o.own.on = self:GetChecked() and true or false
         else cdb().off[o.id] = (not self:GetChecked()) or nil end
         W.sound(self:GetChecked() and "check" or "uncheck")

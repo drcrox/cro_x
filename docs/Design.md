@@ -262,3 +262,6 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 ### Commands tab, build in the corner (0.57-alpha2.40)
 - New **Commands** section lists every slash command (one `COMMANDS` list feeds both the tab and `/x help`).
 - The build text on the Setup page now sits in the bottom-left corner of the picture (bottom right is the artist's signature). The Setup section runs to the bottom of the window so the corner is the real corner.
+
+### Locked spec lines are visible (0.57-alpha2.41)
+- The Lines tab now also lists spec lines the character **could** unlock (their own class, any spec and band not yet unlocked), after the lines they can say. They are greyed, marked "locked - unlocks as you spend more talent points in <tree>", and their checkbox is disabled: a locked line can be read and heard but never switched on or off, and the engine never says it. The count reads "N lines your character can say · M more to unlock". Other classes' spec lines, and lines blocked by temperament or race, stay hidden (still no option to show lines the character cannot say).

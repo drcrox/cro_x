@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.41 · 2026-11-15
+- Locked spec lines visible but not toggleable
+
 ## 0.57-alpha2.40 · 2026-11-15
 - Commands tab; build text in the picture corner
 

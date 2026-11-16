@@ -529,3 +529,35 @@ r = lua.eval('''function(ns)
 end''')(ns)
 check("commands section lists the commands", r["rows"] >= 12 and r["h"] > 100, (r["rows"], r["h"]))
 check("the setup picture section runs to the window's bottom", r["fill"])
+
+# --- spec lines you could unlock show up, locked
+r = lua.eval('''function(ns)
+  ns.openSection("lines")
+  local L = ns._sections.lines
+  local pf = ns.profile
+  local savedSpec = pf.spec
+  pf.spec = {Arms = 1}                       -- Arms early unlocked; the rest is locked
+  L._state.sources = {spec = true}
+  L._state.moments = {}
+  L._state.limit = 500
+  L:refresh()
+  local out = {count = L.count._text}
+  local lockedRows, openRows = 0, 0
+  local offBefore = 0 for _ in pairs(ns.cdb.off) do offBefore = offBefore + 1 end
+  for _, row in ipairs(L.rows) do
+    if row._shown and row.sub and row.sub._text and row.sub._text:find("locked", 1, true) then
+      lockedRows = lockedRows + 1
+      row.check:Click()
+    elseif row._shown and row.sub and row.sub._text and row.sub._text:find("Spec", 1, true) then
+      openRows = openRows + 1
+    end
+  end
+  local offAfter = 0 for _ in pairs(ns.cdb.off) do offAfter = offAfter + 1 end
+  out.locked, out.open, out.offSame = lockedRows, openRows, offBefore == offAfter
+  pf.spec = savedSpec
+  L._state.sources = {}
+  L:refresh()
+  return out
+end''')(ns)
+check("locked spec lines are listed after the ones you can say", r["locked"] > 0 and r["open"] > 0 and "more to unlock" in r["count"], r)
+check("a locked line cannot be switched on or off", r["offSame"])
