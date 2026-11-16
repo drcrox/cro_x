@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.65"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.65-beta.1"
+local BUILD = "0.65-beta.2"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -254,11 +254,26 @@ ns.refreshProfile = refreshProfile
 -- An Alliance character gets the LOK'TAR OGAR screen on its own, once a session. The game does not always know the faction
 -- right at login, so this is tried again as the world loads and a few seconds later; closing the screen keeps it closed.
 local allianceShown = false
+local allianceTold = false
 function ns.autoShowAlliance()
-  if allianceShown or not cdb or not cdb.alliance or cdb.alliance.disabled then return end
+  if allianceShown or not cdb or not cdb.alliance then return end
   if not profile.faction then refreshProfile() end
   if not ns.isAlliance() then return end
-  if ns.showAlliance and pcall(ns.showAlliance) then allianceShown = true end
+  if cdb.alliance.disabled then       -- ticked "Disable addon and reroll Horde" earlier: say so once instead of staying silent
+    if not allianceTold then
+      allianceTold = true
+      p("is switched off for this character. Type /x and untick the box to bring the screen back.")
+    end
+    return
+  end
+  if not ns.showAlliance then return end
+  local ok, err = pcall(ns.showAlliance)
+  if ok then allianceShown = true
+  elseif ns.Bug and ns.Bug.capture and not allianceTold then
+    allianceTold = true
+    ns.Bug.capture(err)
+    p("could not open the Alliance screen. Type /x debug to see why.")
+  end
 end
 
 -- The name to show for the character: first and last name from Total RP 3 when it is loaded and has them, otherwise

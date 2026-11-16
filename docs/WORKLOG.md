@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.65-beta.2 · 2026-11-15
+- Alliance login says why when the screen stays shut (switched off, or an error)
+
 ## 0.65-beta.1 · 2026-11-15
 - Alliance characters get the LOK'TAR OGAR screen automatically at login
 

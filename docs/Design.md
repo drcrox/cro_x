@@ -343,3 +343,4 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 
 ## Alliance screen opens on its own (0.65-beta.1)
 - The LOK'TAR OGAR screen did not always open at login: the game does not always know the character's faction at that moment, so the one check made at login found nothing. `ns.autoShowAlliance` now tries at login, when the world loads, and again at 1.5, 5 and 13 seconds; it reads the faction again if it is still unknown. It opens once a session (closing it keeps it closed) and not when "Disable addon and reroll Horde" is ticked. The /x command still opens it any time.
+- (0.65-beta.2) If the Alliance screen is switched off for the character ("Disable addon and reroll Horde" ticked earlier), login now says so once in chat instead of staying silent; if the screen fails to build, the error is captured for /x debug and one chat line says so.
