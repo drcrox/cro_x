@@ -1404,8 +1404,13 @@ function ns.showSplash(onDone)
   if ns.isAlliance() then return end
   if not splash then
     splash = W.make("Frame", UIParent, {"BackdropTemplate"}, "CROX2SplashFrame")
-    splash:SetSize(560, 440)
+    local savedSize = ns.db and ns.db.splashSize
+    splash:SetSize(savedSize and savedSize[1] or 560, savedSize and savedSize[2] or 440)
     splash:SetPoint("CENTER", 0, 40)
+    splash:SetResizable(true)
+    splash:SetClampedToScreen(true)
+    if splash.SetResizeBounds then splash:SetResizeBounds(540, 440, 1100, 860)
+    elseif splash.SetMinResize then splash:SetMinResize(540, 440) splash:SetMaxResize(1100, 860) end
     splash:SetFrameStrata("DIALOG")
     splash:EnableMouse(true)
     if splash.SetBackdrop then
@@ -1457,7 +1462,9 @@ function ns.showSplash(onDone)
     -- the choices, on a dark plate so they read over the picture
     local plate = CreateFrame("Frame", nil, splash)
     plate:SetPoint("TOP", splash.who, "BOTTOM", 0, -12)
-    plate:SetSize(500, 40 + #CHOICES * 34)
+    plate:SetPoint("LEFT", splash, "LEFT", 28, 0)
+    plate:SetPoint("RIGHT", splash, "RIGHT", -28, 0)
+    plate:SetHeight(40 + #CHOICES * 34)
     local pt = plate:CreateTexture(nil, "BACKGROUND")
     pt:SetAllPoints()
     pt:SetColorTexture(0, 0, 0, 0.62)
@@ -1488,6 +1495,19 @@ function ns.showSplash(onDone)
     local show = W.check(splash, "Show at login", function(_, on) cdb().splash = on and true or false end)
     show:SetPoint("BOTTOMRIGHT", -110, 18)
     splash.show = show
+    -- drag the corner to resize; the picture stays whole and the size is remembered
+    local grip = CreateFrame("Button", nil, splash)
+    grip:SetSize(16, 16)
+    grip:SetPoint("BOTTOMRIGHT", -6, 6)
+    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    grip:SetScript("OnMouseDown", function() splash.sizing = true splash:StartSizing("BOTTOMRIGHT") end)
+    grip:SetScript("OnMouseUp", function()
+      splash.sizing = nil
+      splash:StopMovingOrSizing()
+      if ns.db then ns.db.splashSize = {math.floor(splash:GetWidth() + 0.5), math.floor(splash:GetHeight() + 0.5)} end
+    end)
     function splash:refreshChoices()
       local c = cdb()
       if not c.homeland then
@@ -1501,7 +1521,7 @@ function ns.showSplash(onDone)
       if ns.refreshUI then ns.refreshUI() end
     end
     splash:SetScript("OnUpdate", function(self, el)
-      local busy = not cdb().setupDone or self:IsMouseOver() or (DropDownList1 and DropDownList1:IsShown())
+      local busy = not cdb().setupDone or self:IsMouseOver() or self.sizing or (DropDownList1 and DropDownList1:IsShown())
       if busy then self.left = SPLASH_SECONDS return end
       self.left = (self.left or SPLASH_SECONDS) - (el or 0)
       if self.left <= 0 then self:Hide() end

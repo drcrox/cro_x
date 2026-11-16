@@ -215,3 +215,4 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 - What else carries over from the first alpha (enemy kinds, the DRAFT class pools). Troll voice: carried over (Options, 2026-11-15).
 
 - **Splash header and title card (2026-11-15):** the splash carries the same header as the main window ("Combat Roleplay Options - cro/x") in a dark strip across the top, and a title card ("Combat Roleplay Options" in the large decorative font between gold rules) above the character dropdowns, so people know which addon it is.
+- **Splash is resizable (2026-11-15):** drag the corner grip (minimum 540x440); the choices plate widens with it, the poster stays whole, the size is remembered, and the splash won't auto-close while it's being resized.

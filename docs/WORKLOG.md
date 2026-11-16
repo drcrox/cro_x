@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.22 · 2026-11-15
+- splash is resizable (size remembered)
+
 ## 0.57-alpha2.21 · 2026-11-15
 - splash: addon header strip and a Combat Roleplay Options title card above the dropdowns
 
