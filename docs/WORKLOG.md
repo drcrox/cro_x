@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.65-beta.3 · 2026-11-15
+- Alliance login always prints a status line, and reports an opened screen that is not showing
+
 ## 0.65-beta.2 · 2026-11-15
 - Alliance login says why when the screen stays shut (switched off, or an error)
 

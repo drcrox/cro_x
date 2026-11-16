@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.65"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.65-beta.2"
+local BUILD = "0.65-beta.3"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -268,7 +268,17 @@ function ns.autoShowAlliance()
   end
   if not ns.showAlliance then return end
   local ok, err = pcall(ns.showAlliance)
-  if ok then allianceShown = true
+  if ok then
+    allianceShown = true
+    if C_Timer and C_Timer.After then
+      C_Timer.After(2, function()
+        local f = _G.CROX2AllianceFrame
+        if f and f.IsShown and not f:IsShown() and not allianceTold then
+          allianceTold = true
+          p("the Alliance screen was opened but is not showing. Type /x.")
+        end
+      end)
+    end
   elseif ns.Bug and ns.Bug.capture and not allianceTold then
     allianceTold = true
     ns.Bug.capture(err)
@@ -1383,6 +1393,7 @@ ev:SetScript("OnEvent", function(_, event, a1, ...)
       for _, secs in ipairs({1.5, 5, 13}) do C_Timer.After(secs, function() pcall(ns.autoShowAlliance) end) end
     end
     if ns.isAlliance() then
+      p(("cro_x %s loaded (Alliance character). If the LOK'TAR OGAR screen does not open, type /x."):format(BUILD))
       pcall(ns.autoShowAlliance)
       return
     end
