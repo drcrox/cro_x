@@ -1211,14 +1211,17 @@ r = lua.eval('''function(ns, H)
   ns.refreshProfile()
   ns.cdb.alliance.disabled = false ns.cdb.on = true
   CROX2AllianceFrame:Hide()
-  ns.autoShowAlliance()
+  ns.autoShowAlliance()                          -- the first moments of login: shows it, but does not count as done
   out.opens = CROX2AllianceFrame:IsShown()
-  CROX2AllianceFrame:Hide()
+  CROX2AllianceFrame:Hide()                      -- the game clears it as the world loads
+  ns.autoShowAlliance(true)                      -- the delayed try shows it again, and now it counts
+  out.reopens = CROX2AllianceFrame:IsShown()
+  CROX2AllianceFrame:Hide()                      -- the player closes it
   H.fire("PLAYER_ENTERING_WORLD")
-  ns.autoShowAlliance()
+  ns.autoShowAlliance(true)
   out.staysClosed = not CROX2AllianceFrame:IsShown()
   H.me.faction = "Horde" ns.refreshProfile()
   return out
 end''')(ns, H)
 r = dict(r)
-check("an Alliance character gets the LOK'TAR OGAR screen on its own, once a session", r["opens"] and r["staysClosed"], r)
+check("an Alliance character gets the LOK'TAR OGAR screen on its own, once a session", r["opens"] and r["reopens"] and r["staysClosed"], r)
