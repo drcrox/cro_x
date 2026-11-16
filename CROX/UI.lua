@@ -1110,7 +1110,7 @@ local function buildLines(parent)
       r:ClearAllPoints()
       r:SetPoint("TOPLEFT", 4, y)
       r:SetPoint("RIGHT", self, "RIGHT", -4, 0)
-      local off = (not o.locked) and cdb().off[o.id] == true
+      local off = cdb().off[o.id] == true
       local text = o.line.e and ((ns.profile.name or "") .. " " .. o.line.t) or o.line.t
       if cdb().filter and o.line.c then text = o.line.c end
       r.txt:SetText((off or o.locked) and ("|cff808080" .. text .. "|r") or text)
@@ -1121,13 +1121,13 @@ local function buildLines(parent)
       if o.line.r then tags[#tags + 1] = "rating " .. o.line.r end
       local n = cdb().said[o.id] or 0
       r.sub:SetText(("%s%s · %s"):format(o.src, #tags > 0 and (" · " .. table.concat(tags, ", ")) or "",
-        o.locked and ("|cffcc9933locked|r - unlocks as you spend more talent points in " .. (o.tree or "this tree"))
+        o.locked and ("|cffcc9933locked|r - " .. (off and "stays off" or "switches on by itself") .. " once you spend more talent points in " .. (o.tree or "this tree"))
           or (off and "switched off" or ("said " .. n .. " time" .. (n == 1 and "" or "s")))))
       local tshort, tfull = trigger(o)
       if o.own then tshort, tfull = "", "" end
       r.trig:SetText(tshort ~= "" and ("Can trigger on: " .. tshort) or "")
       r.trigFull = tfull
-      r.check:SetChecked(not off and not o.locked)
+      r.check:SetChecked(not off)
       if r.check.SetEnabled then r.check:SetEnabled(not o.locked) end
       r.check:SetScript("OnClick", function(self)
         if o.locked then self:SetChecked(false) return end      -- a locked line can be seen, never switched on
