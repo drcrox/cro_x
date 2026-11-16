@@ -175,8 +175,8 @@ local function choiceItems(kind)
   end
 end
 ns.choiceItems = choiceItems
-local CHOICES = {{"temperament", "Temperament"}, {"homeland", "Homeland"}, {"upbringing", "Upbringing"},
-  {"drive", "What drives them"}, {"pronouns", "Pronouns"}}
+local CHOICES = {{"temperament", "Temperament"}, {"homeland", "Homeland"}, {"upbringing", "Origin"},
+  {"drive", "Motivation"}, {"pronouns", "Pronouns"}}
 ns.CHOICES = CHOICES
 
 local SPLASH_HINTS = {pronouns = "Used in emotes"}
@@ -185,11 +185,20 @@ local SPLASH_HINTS = {pronouns = "Used in emotes"}
 -- Character tab and the splash page. The poster sits behind it, whole, fitted inside the area.
 local function buildHome(parent)
   local s = CreateFrame("Frame", nil, parent)
-  s.fill = true
-  posterBG(s)
-  local dim = s:CreateTexture(nil, "BACKGROUND", nil, 0)
-  dim:SetAllPoints()
-  dim:SetColorTexture(0, 0, 0, 0.3)
+  s.fill = true       -- the poster behind every page is drawn once, behind the whole page (see createMain)
+  -- a frame around the page, so it is clear where the Setup screen begins and ends
+  do
+    local function edge(a1, a2, w, h)
+      local t = s:CreateTexture(nil, "OVERLAY", nil, 7)
+      t:SetColorTexture(0.72, 0.56, 0.16, 1)
+      t:SetPoint(a1, s, a1, 0, 0)
+      t:SetPoint(a2, s, a2, 0, 0)
+      if w then t:SetWidth(w) else t:SetHeight(h) end
+      return t
+    end
+    s.edges = {edge("TOPLEFT", "TOPRIGHT", nil, 2), edge("BOTTOMLEFT", "BOTTOMRIGHT", nil, 2),
+      edge("TOPLEFT", "BOTTOMLEFT", 2), edge("TOPRIGHT", "BOTTOMRIGHT", 2)}
+  end
 
   -- the title card
   local card = CreateFrame("Frame", nil, s)
@@ -347,25 +356,151 @@ local function buildHome(parent)
     plate2:SetHeight(34 + gh + 10)
   end
 
-  -- read from the game: professions and how deep the spec lines have unlocked
+  -- character tags: every tag there is, in tabs; a box marks the ones this character has
   local plate3 = CreateFrame("Frame", nil, s)
   plate3:SetPoint("TOP", plate2, "BOTTOM", 0, -8)
   plate3:SetPoint("LEFT", s, "LEFT", 8, 0)
   plate3:SetPoint("RIGHT", s, "RIGHT", -8, 0)
-  plate3:SetHeight(92)
+  plate3:SetHeight(140)
   dark(plate3)
-  local head3 = W.heading(plate3, "Read from the game")
-  head3:SetPoint("TOPLEFT", 14, -10)
-  s.facts = W.text(plate3, "", "GameFontHighlight")
-  s.facts:SetPoint("TOPLEFT", head3, "BOTTOMLEFT", 0, -4)
-  s.facts:SetPoint("RIGHT", plate3, "RIGHT", -14, 0)
-  s.facts:SetJustifyH("LEFT")
-  s.spec = W.text(plate3, "", "GameFontHighlightSmall")
-  s.spec:SetPoint("TOPLEFT", s.facts, "BOTTOMLEFT", 0, -6)
-  s.spec:SetPoint("RIGHT", plate3, "RIGHT", -14, 0)
-  s.spec:SetJustifyH("LEFT")
-  local sh = W.hint(plate3, "Spec lines unlock as you spend talent points deeper in a tree.")
-  sh:SetPoint("TOPLEFT", s.spec, "BOTTOMLEFT", 0, -3)
+  local head3 = W.heading(plate3, "Character tags")
+  head3:SetPoint("TOP", plate3, "TOP", 0, -10)
+  local TAG_TABS = {{"race", "Race"}, {"class", "Class"}, {"temperament", "Temperament"}, {"homeland", "Homeland"},
+    {"upbringing", "Origin"}, {"drive", "Motivation"}, {"profs", "Professions"}, {"spec", "Spec"}}
+  local CLASSES = {"DRUID", "HUNTER", "MAGE", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR"}
+  local PROFS_ALL = {"alchemy", "blacksmithing", "cooking", "enchanting", "engineering", "first_aid", "fishing",
+    "herbalism", "leatherworking", "mining", "skinning", "tailoring"}
+  local HOME_ORDER = {"Orc", "Troll", "Tauren", "Scourge", "Skyborne"}
+  local HOME_RACE = {Scourge = "Forsaken"}
+  local function describe(kind, key) local d = CROX2_DESCRIBE and CROX2_DESCRIBE[kind] return d and d[key] end
+  -- every tag in a tab: {key, label, own, tip}
+  local function tagList(kind)
+    local out, pf, c = {}, ns.profile or {}, cdb()
+    if kind == "race" then
+      for _, r in ipairs(ns.Sim and ns.Sim.RACES or {"Orc", "Tauren", "Troll", "Forsaken", "Skyborne"}) do
+        out[#out + 1] = {r, r, pf.race == r}
+      end
+    elseif kind == "class" then
+      for _, k in ipairs(CLASSES) do out[#out + 1] = {k, cap(k:lower()), pf.class == k} end
+    elseif kind == "temperament" then
+      for _, v in ipairs(ns.TEMPERAMENTS) do out[#out + 1] = {v, cap(v), c.temperament == v, describe("temperament", v)} end
+    elseif kind == "upbringing" then
+      for _, v in ipairs(ns.UPBRINGINGS) do out[#out + 1] = {v, cap(v), c.upbringing == v, describe("upbringing", v)} end
+    elseif kind == "drive" then
+      for _, v in ipairs(ns.DRIVES) do out[#out + 1] = {v, cap(v), c.drive == v, describe("drive", v)} end
+    elseif kind == "homeland" then
+      for _, rk in ipairs(HOME_ORDER) do
+        for _, h in ipairs(CROX2_HOMELANDS and CROX2_HOMELANDS[rk] or {}) do
+          out[#out + 1] = {h[1], h[2], c.homeland == h[1], (HOME_RACE[rk] or rk) .. " homeland"}
+        end
+      end
+    elseif kind == "profs" then
+      for _, k in ipairs(PROFS_ALL) do out[#out + 1] = {k, k == "first_aid" and "First Aid" or cap(k), pf.profs and pf.profs[k] and true or false} end
+    elseif kind == "spec" then
+      local depth = {"early", "middle", "deep"}
+      for _, tree in ipairs((ns.SPEC_ORDER or {})[pf.class or ""] or {}) do
+        local band = (pf.spec or {})[tree] or 0
+        out[#out + 1] = {tree, band > 0 and (tree .. " · " .. depth[math.min(3, band)]) or tree, band > 0,
+          band > 0 and "Spec lines unlock as you spend talent points deeper in a tree." or nil}
+      end
+    end
+    return out
+  end
+  s.tagTab = "race"
+  s.tagTabs, s.tagChips = {}, {}
+  local function tagTabBtn()
+    local b = CreateFrame("Button", nil, plate3)
+    b:SetHeight(22)
+    b.bg = b:CreateTexture(nil, "BACKGROUND")
+    b.bg:SetAllPoints()
+    b.top = b:CreateTexture(nil, "ARTWORK")
+    b.top:SetPoint("TOPLEFT", 0, 0) b.top:SetPoint("TOPRIGHT", 0, 0) b.top:SetHeight(2)
+    b.label = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    b.label:SetPoint("CENTER", 0, -1)
+    function b:setLabel(t) self.label:SetText(t) self:SetWidth(math.max(40, (self.label:GetStringWidth() or 40) + 20)) end
+    function b:setActive(on)
+      if on then
+        self.bg:SetColorTexture(0.18, 0.14, 0.06, 0.95) self.top:SetColorTexture(0.9, 0.72, 0.2, 1) self.label:SetTextColor(1, 0.82, 0)
+      else
+        self.bg:SetColorTexture(0, 0, 0, 0.55) self.top:SetColorTexture(0.35, 0.3, 0.2, 0.8) self.label:SetTextColor(0.75, 0.75, 0.75)
+      end
+    end
+    return b
+  end
+  local function chipFrame()
+    local b = CreateFrame("Frame", nil, plate3)
+    b:SetHeight(24)
+    b:EnableMouse(true)
+    b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.label:SetPoint("CENTER", 0, 0)
+    b.edges = {}
+    for _, e in ipairs({{"TOPLEFT", "TOPRIGHT", nil, 2}, {"BOTTOMLEFT", "BOTTOMRIGHT", nil, 2}, {"TOPLEFT", "BOTTOMLEFT", 2}, {"TOPRIGHT", "BOTTOMRIGHT", 2}}) do
+      local t = b:CreateTexture(nil, "BORDER")
+      t:SetColorTexture(0.9, 0.72, 0.2, 1)
+      t:SetPoint(e[1], b, e[1]) t:SetPoint(e[2], b, e[2])
+      if e[3] then t:SetWidth(e[3]) else t:SetHeight(e[4]) end
+      b.edges[#b.edges + 1] = t
+    end
+    b.fill = b:CreateTexture(nil, "BACKGROUND")
+    b.fill:SetAllPoints()
+    b:SetScript("OnEnter", function(self)
+      if not self.tip then return end
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:SetText(self.name or "", 1, 0.82, 0)
+      GameTooltip:AddLine(self.tip, 1, 1, 1, true)
+      GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return b
+  end
+  local tagHint = W.hint(plate3, "A box marks what your character has. Race, class, professions and talents are read from the game; the rest you choose above.")
+  tagHint:SetWordWrap(true)
+  s.tagHint = tagHint
+  -- place the tabs and the tags for the width given; sets the height of the plate
+  function s:layoutTags(w)
+    local pw = (w or 600) - 16
+    local x, row, y = 10, 0, -34
+    for i, t in ipairs(TAG_TABS) do
+      local b = self.tagTabs[i]
+      if not b then
+        b = tagTabBtn()
+        self.tagTabs[i] = b
+        b:SetScript("OnClick", function() W.sound("click") s.tagTab = TAG_TABS[i][1] s:layoutTags(s.w) if ns.relayout then ns.relayout() end end)
+      end
+      b:setLabel(t[2])
+      b:setActive(self.tagTab == t[1])
+      if x + b:GetWidth() > pw - 6 and x > 10 then x = 10 row = row + 1 end
+      b:ClearAllPoints()
+      b:SetPoint("TOPLEFT", plate3, "TOPLEFT", x, y - row * 25)
+      b:Show()
+      x = x + b:GetWidth() + 3
+    end
+    y = y - (row + 1) * 25 - 10
+    local list = tagList(self.tagTab)
+    local cx, crow = 10, 0
+    for i, t in ipairs(list) do
+      local c = self.tagChips[i]
+      if not c then c = chipFrame() self.tagChips[i] = c end
+      c.name, c.tip = t[2], t[4]
+      c.label:SetText(t[2])
+      c.label:SetTextColor(t[3] and 1 or 0.62, t[3] and 0.82 or 0.62, t[3] and 0 or 0.62)
+      for _, e in ipairs(c.edges) do e:SetShown(t[3] and true or false) end
+      c.fill:SetColorTexture(t[3] and 0.2 or 0, t[3] and 0.15 or 0, t[3] and 0.04 or 0, t[3] and 0.8 or 0.35)
+      c:SetWidth((c.label:GetStringWidth() or 40) + 22)
+      if cx + c:GetWidth() > pw - 6 and cx > 10 then cx = 10 crow = crow + 1 end
+      c:ClearAllPoints()
+      c:SetPoint("TOPLEFT", plate3, "TOPLEFT", cx, y - crow * 30)
+      c:Show()
+      cx = cx + c:GetWidth() + 6
+    end
+    for i = #list + 1, #self.tagChips do self.tagChips[i]:Hide() end
+    y = y - (crow + 1) * 30 - 6
+    tagHint:ClearAllPoints()
+    tagHint:SetPoint("TOPLEFT", plate3, "TOPLEFT", 12, y)
+    tagHint:SetWidth(pw - 24)
+    plate3:SetHeight(-y + 30)
+  end
+  function s:refreshTags() self:layoutTags(self.w) end
 
   -- the foot: done, choose lines, show at login
   local tip = W.hint(s, "Type /x any time to come back here  ·  /x flag to review a fight")
@@ -381,8 +516,9 @@ local function buildHome(parent)
   local lines = W.button(foot, "Choose lines", 110, function() s:finish(true) end)
   lines:SetPoint("RIGHT", done, "LEFT", -6, 0)
   W.tooltip(lines, "Choose lines", "Go and pick which lines your character says, or add some of your own.")
-  local show = W.check(foot, "Open to this page at login", function(_, on) cdb().splash = on and true or false end)
-  show:SetPoint("RIGHT", lines, "LEFT", -150, 0)
+  -- the login switch lives in the bottom left corner of the window (it is moved there when the window is built)
+  local show = W.check(s, "Open to this page at login", function(_, on) cdb().splash = on and true or false end)
+  W.tooltip(show, "Open to this page at login", "When on, this Setup page opens by itself each time you log in. Off: it opens only when you type /x.")
   s.show = show
   -- first time through: finishing marks setup done and offers the lines
   function s:finish(toLines)
@@ -419,13 +555,14 @@ local function buildHome(parent)
     self:layoutSpeak()
     local pf = ns.profile
     self.who:SetText(("%s · %s %s"):format(pf.name or "", pf.race or "", cap((pf.class or ""):lower())))
-    self.facts:SetText("Professions: " .. profText())
-    self.spec:SetText("Spec lines unlocked: " .. specText())
+    self:refreshTags()
     self.show:SetChecked(c.splash ~= false)
   end
   function s:refresh() self:refreshChoices() end
   function s:layout(w)
+    self.w = w
     self.grp:SetWidth(math.max(380, math.min(640, w - 40)))
+    self:layoutTags(w)
     local h = 6 + 54 + 6 + 18 + 12 + plate:GetHeight() + 8 + plate2:GetHeight() + 8 + plate3:GetHeight() + 8 + 14 + 8 + 30 + 16
     self.height = h
     return h
@@ -775,7 +912,7 @@ local function linesFor(moment)
   for k in pairs(CROX2_TAGS) do tkeys[#tkeys + 1] = k end
   table.sort(tkeys)
   for _, k in ipairs(tkeys) do
-    local src = k:find("^prof:") and ("Profession · " .. k:gsub("^prof:", "")) or ("Tag · " .. k:gsub(":", ": "))
+    local src = k:find("^prof:") and ("Profession · " .. k:gsub("^prof:", "")) or ("Tag · " .. k:gsub("^up:", "origin:"):gsub("^drive:", "motivation:"):gsub(":", ": "))
     addList("tag:" .. k, CROX2_TAGS[k], src, fits)
   end
   for cls, trees in pairs(CROX2_SPEC or {}) do
@@ -835,11 +972,11 @@ end
 
 -- which kind of source a line comes from, for the source checkboxes
 local SOURCE_LIST = {
-  {"base", "Baseline"}, {"drive", "Tag: drive"}, {"up", "Tag: upbringing"}, {"home", "Tag: homeland"},
+  {"base", "Baseline"}, {"drive", "Tag: motivation"}, {"up", "Tag: origin"}, {"home", "Tag: homeland"},
   {"class", "Tag: class"}, {"spec", "Spec lines"}, {"prof", "Professions"}, {"cr", "Call and response"},
   {"dmg", "Damage types"}, {"profemote", "Profession emotes"}, {"own", "My own lines"},
 }
-local CHIP_LABEL = {base = "Baseline", drive = "Drive", up = "Upbringing", home = "Homeland", class = "Class",
+local CHIP_LABEL = {base = "Baseline", drive = "Motivation", up = "Origin", home = "Homeland", class = "Class",
   spec = "Spec", prof = "Professions", cr = "Call and response", dmg = "Damage types", profemote = "Profession emotes", own = "My lines"}
 local function sourceKind(o)
   if o.own then return "own" end
@@ -1499,6 +1636,8 @@ local hordePage, alliancePage, scrollFrame, scrollChild, listFrame
 local function showSection(key)
   current = key
   for k, s in pairs(sections) do s:SetShown(k == key) end
+  if sections.home and sections.home.show then sections.home.show:SetShown(key == "home") end
+  if hordePage and hordePage.dim then hordePage.dim:SetAlpha(key == "home" and 0.3 or 0.66) end
   for k, b in pairs(sectionButtons) do
     if k == key then b:LockHighlight() b.text:SetFontObject("GameFontHighlight") else b:UnlockHighlight() b.text:SetFontObject("GameFontNormal") end
   end
@@ -1612,6 +1751,15 @@ local function buildMain()
 
   hordePage = CreateFrame("Frame", nil, body)
   hordePage:SetAllPoints()
+  -- the Horde poster sits behind every page, fixed in place while the page scrolls over it; the page is dimmed
+  -- more on the text-heavy pages (Setup keeps the picture bright)
+  local pageBG = CreateFrame("Frame", nil, hordePage)
+  pageBG:SetAllPoints()
+  posterBG(pageBG)
+  hordePage.dim = pageBG:CreateTexture(nil, "BACKGROUND", nil, 0)
+  hordePage.dim:SetAllPoints()
+  hordePage.dim:SetColorTexture(0, 0, 0, 1)
+  hordePage.dim:SetAlpha(0.3)
   alliancePage = CreateFrame("Frame", nil, body)
   alliancePage:SetAllPoints()
   alliancePage.art = allianceArt(alliancePage, false)
@@ -1638,6 +1786,15 @@ local function buildMain()
     local s = sd[3](scrollChild)
     s:Hide()
     sections[sd[1]] = s
+  end
+
+  -- the Setup page's login switch sits in the window's bottom left corner, under the section list
+  if sections.home and sections.home.show then
+    local sh = sections.home.show
+    sh:SetParent(hordePage)
+    sh:ClearAllPoints()
+    sh:SetPoint("BOTTOMLEFT", main, "BOTTOMLEFT", 12, 5)
+    sh:SetShown(current == "home")
   end
 
   -- tabs along the bottom edge, as on the character sheet

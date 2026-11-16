@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.46 · 2026-11-15
+- simulator: virtual clock, 2x-Instant, fake users; character tags tabs; origin/motivation; poster on every page; login switch bottom left
+
 ## 0.57-alpha2.45 · 2026-11-15
 - tag chips on the Lines page; profession combat lines switch with a sample window
 

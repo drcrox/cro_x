@@ -68,7 +68,7 @@ end
 
 local function me() return ns.profile.name or str(safe(UnitName, "player")) end
 local function short(n) if type(n) ~= "string" or secret(n) then return nil end return n:match("^[^-]+") or n end
-local function grouped() return safe(IsInGroup) and true or false end
+local function grouped() return ns.simParty ~= nil or (safe(IsInGroup) and true or false) end
 
 -- my raid subgroup (0 in a party)
 local function mySubgroup()
@@ -81,6 +81,7 @@ local function mySubgroup()
 end
 
 local function channel()
+  if ns.simParty then return "PARTY" end
   if safe(IsInRaid) then return "RAID" end
   if grouped() then return "PARTY" end
 end
@@ -90,6 +91,10 @@ local function send(kind, ...)
   if not ch then return end
   local parts = {"V2", kind, tostring(mySubgroup())}
   for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
+  if ns.simParty then       -- the simulator: queue it for the other fake characters, as the game would deliver it
+    G.simInbox[#G.simInbox + 1] = {from = ns.simActor, msg = table.concat(parts, "|")}
+    return
+  end
   local f = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
   if f then pcall(f, PREFIX, table.concat(parts, "|"), ch) end
 end
@@ -103,6 +108,7 @@ end
 local function unitFor(name)
   if not name then return nil end
   if name == me() then return "player" end
+  if ns.simParty then return "simparty" end
   local raid = safe(IsInRaid)
   for i = 1, (num(safe(GetNumGroupMembers)) or 0) do
     local u = raid and ("raid" .. i) or ("party" .. i)
@@ -361,6 +367,7 @@ function G.onPress(info, t)
     local can = safe(UnitCanAttack, "player", "target")
     local onMe = not secret(can) and can and safe(UnitIsUnit, "targettarget", "player")
     if secret(onMe) then onMe = nil end
+    if ns.simParty then onMe = ns.sim and ns.sim.onMe or false end
     if onMe then
       local helper = helperFor("T")
       if helper and not G.crRoll("crAsk") then
@@ -417,7 +424,7 @@ local function onAddon(prefix, msg, ch, sender)
     m.flags, m.flagsT = parts[4] or "", t
   elseif kind == "SP" then
     m.level = tonumber(parts[5]) or m.level
-    notePartyLine(from)
+    if not ns.simParty then notePartyLine(from) end      -- (the simulator's party shares one budget, so the speaker's own line already counted)
   elseif kind == "CALL" then
     local xid = (parts[7] and parts[7] ~= "") and parts[7] or (from .. "-" .. math.floor(t))
     noteExchange(xid, parts[4], from, {parts[5]})
@@ -444,7 +451,7 @@ f:SetScript("OnUpdate", function(_, el)
   acc = acc + (el or 0)
   if acc < 1 then return end
   acc = 0
-  if not ns.cdb or not ns.cdb.on or not ns.cdb.cr or not grouped() or not ns.inCombat then return end
+  if ns.simParty or not ns.cdb or not ns.cdb.on or not ns.cdb.cr or not grouped() or not ns.inCombat then return end
   local fl = myFlags()
   local t = now()
   if fl ~= lastFlags or t - lastSent >= 4 then
@@ -466,6 +473,38 @@ ev:SetScript("OnEvent", function(_, event, ...)
   end
   if grouped() then send("HI", ns.VERSION, ns.profile.class or "", G.PROTO, ns.chattyNow()) end
 end)
+
+------------------------------------------------------------------------
+-- Simulator support: each fake character keeps its own roster, pending replies and call times; the party budget
+-- is shared (in the game every addon ends up with nearly the same one)
+------------------------------------------------------------------------
+G.simInbox = {}
+function G.simFresh() return {members = {}, lastCall = {}, exchanges = {}} end
+function G.simGet() return {members = members, pendingReply = pendingReply, pendingThanks = pendingThanks, lastCall = lastCall, exchanges = exchanges} end
+function G.simSet(g)
+  g = g or G.simFresh()
+  members, pendingReply, pendingThanks, lastCall, exchanges = g.members, g.pendingReply, g.pendingThanks, g.lastCall, g.exchanges
+  G.members, G.exchanges = members, exchanges
+end
+function G.simPending() return pendingReply end
+function G.simResetParty() pBudget, pBudgetT, lastPartySpoke, lastPartySpeaker = 1.0, 0, -1000, nil for i = #partyTimes, 1, -1 do partyTimes[i] = nil end end
+-- what a character of this class can help with, as the status flags the real addon sends
+local SIM_FLAGS = {WARRIOR = "T", PALADIN = "PDMH", PRIEST = "DMH", SHAMAN = "PDHT", DRUID = "PCHT", MAGE = "C", HUNTER = "", ROGUE = "", WARLOCK = ""}
+function G.simFlags(class, spec)
+  local f = SIM_FLAGS[class or ""] or ""
+  if (class == "WARRIOR" and spec == "Protection") or (class == "DRUID" and spec == "Feral") then f = f .. "K" end
+  return f
+end
+-- deliver everything queued: each message goes to every other fake character, through the real receiving code
+function G.simFlush(forEach)
+  local guard = 0
+  while #G.simInbox > 0 and guard < 200 do
+    guard = guard + 1
+    local item = table.remove(G.simInbox, 1)
+    forEach(item.from, item.msg)
+  end
+end
+function G.simReceive(sender, msg) onAddon(PREFIX, msg, "PARTY", sender) end
 
 G._test = {answerers = answerers, exchanges = exchanges, onAddon = onAddon, members = members, setPending = function(v) pendingReply = v end,
   setThanks = function(v) pendingThanks = v end, myFlags = myFlags, helperFor = helperFor}

@@ -2,6 +2,10 @@
 -- real line-picking logic, so a player can see (and the log can capture) how their character would talk without
 -- needing an enemy. Nothing is sent to chat: lines appear only in this window, and the "said recently" memory is
 -- put back when the test stops.
+--
+-- Time is pretend too: the sim runs on its own clock (ns.simClock) at 2x, 4x, 6x or instantly, never in real time.
+-- Up to four fake users (f.u.) can join the party. Each is a full character (race, class, background, pace) that
+-- runs the same line-picking and group code as the real one, so party pacing, calls and replies play out for real.
 
 local ADDON, ns = ...
 local W = ns.W
@@ -13,25 +17,119 @@ local SCENARIOS = {
   {2, "Boss fight (3 minutes)", pulls = 1, dur = 180},
   {3, "Five pulls in a row", pulls = 5, dur = 30},
 }
+local SPEEDS = {{1, "2x", 2}, {2, "4x", 4}, {3, "6x", 6}, {4, "Instant", 0}}
+local STEP = 0.25          -- pretend seconds per step
+local REAL_TICK = 0.25     -- real seconds between ticks
 local FOES = {"Razormane Scout", "Venture Co. Laborer", "Bristleback Hunter", "Kolkar Raider",
   "Burning Blade Cultist", "Gnoll Brute", "Dustwind Harpy", "Defias Pillager"}
-local REST = 6          -- seconds between pulls
+local REST = 6          -- pretend seconds between pulls
 
-local frame, msgs, run, snapshot, ticker
-local details = false
+------------------------------------------------------------------------
+-- Who can be what. The Horde race and class combinations in WoW: Forever (Horde Skyborne are Windshapers).
+------------------------------------------------------------------------
+Sim.RACES = {"Orc", "Tauren", "Troll", "Forsaken", "Skyborne"}
+Sim.RACE_CLASSES = {
+  Orc = {"HUNTER", "MAGE", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR"},
+  Tauren = {"DRUID", "HUNTER", "SHAMAN", "WARRIOR"},
+  Troll = {"HUNTER", "MAGE", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR"},
+  Forsaken = {"MAGE", "PALADIN", "PRIEST", "ROGUE", "WARLOCK", "WARRIOR"},
+  Skyborne = {"DRUID", "HUNTER", "ROGUE", "SHAMAN", "WARRIOR"},
+}
+local ALL_CLASSES = {"DRUID", "HUNTER", "MAGE", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR"}
+local RACE_FILE = {Orc = "Orc", Tauren = "Tauren", Troll = "Troll", Forsaken = "Scourge", Skyborne = "Skyborne"}
+local HOME_KEY = {Forsaken = "Scourge"}
+local NAMES = {
+  Orc = {"Grukk", "Mazra", "Thokka", "Durgash", "Zogra", "Ushak", "Brakka", "Korvash"},
+  Tauren = {"Kahnar", "Tahli", "Ruukah", "Moonhorn", "Bahru", "Yarra", "Hakulo", "Nahlia"},
+  Troll = {"Zan'tho", "Jin'rok", "Tala'ji", "Ras'kala", "Vola'jin", "Mojaro", "Zeela", "Kuntai"},
+  Forsaken = {"Corvin", "Maren", "Hollis", "Isolde", "Wystan", "Ysabeau", "Dunmore", "Thessaly"},
+  Skyborne = {"Thalindra", "Vaelis", "Sylnaar", "Aeluin", "Zephren", "Iravel", "Quillith", "Orindel"},
+}
+local PRONOUNS = {{"he", "He / him"}, {"she", "She / her"}, {"they", "They / them"}}
 
-local function say(text, r, g, b) if msgs then msgs:AddMessage(text, r or 1, g or 1, b or 1) end end
+local function cap(s) return s and (s:sub(1, 1):upper() .. s:sub(2):lower()) or "" end
+local function has(list, v) for _, x in ipairs(list or {}) do if x == v then return true end end return false end
+local function pick(list) return list[math.random(#list)] end
 
--- lines as the default chat window writes them
-local function chatLine(channel, text)
-  local name = ns.profile and ns.profile.name or "You"
-  if channel == "YELL" then say(("%s yells: %s"):format(name, text), 1, 0.25, 0.25)
-  elseif channel == "EMOTE" then say(("%s %s"):format(name, text), 1, 0.5, 0.25)
-  else say(("%s says: %s"):format(name, text), 1, 1, 1) end
+function Sim.classesFor(race)
+  if race and Sim.RACE_CLASSES[race] then return Sim.RACE_CLASSES[race] end
+  return ALL_CLASSES
+end
+function Sim.racesFor(class)
+  local out = {}
+  for _, r in ipairs(Sim.RACES) do if has(Sim.RACE_CLASSES[r], class) then out[#out + 1] = r end end
+  return out
+end
+function Sim.homelandsFor(race)
+  if not race or not CROX2_HOMELANDS then return {} end
+  return CROX2_HOMELANDS[HOME_KEY[race] or race] or {}
 end
 
-local function byArch()
-  local cls = CROX2_ABILITIES and CROX2_ABILITIES[ns.profile and ns.profile.class or ""] or {}
+-- turn a fake user's choices (any of them may be "random") into a complete character that obeys the game's race
+-- and class combinations. taken = names already in use.
+function Sim.resolve(def, taken)
+  local d = {}
+  for k, v in pairs(def or {}) do d[k] = v end
+  local race = (d.race and d.race ~= "random") and d.race or nil
+  local class = (d.class and d.class ~= "random") and d.class or nil
+  if race and not Sim.RACE_CLASSES[race] then race = nil end
+  if race and class and not has(Sim.RACE_CLASSES[race], class) then class = nil end
+  if not race and class then
+    local rs = Sim.racesFor(class)
+    if #rs > 0 then race = pick(rs) else class = nil end
+  end
+  race = race or pick(Sim.RACES)
+  class = class or pick(Sim.RACE_CLASSES[race])
+  d.race, d.class = race, class
+  local specs = (ns.SPEC_ORDER or {})[class] or {}
+  if d.spec == nil or d.spec == "random" or not has(specs, d.spec) then d.spec = pick(specs) end
+  if d.depth == nil or d.depth == "random" then d.depth = math.random(1, 3) end
+  if d.pronouns == nil or d.pronouns == "random" then d.pronouns = pick(PRONOUNS)[1] end
+  if d.temperament == nil or d.temperament == "random" then d.temperament = pick(ns.TEMPERAMENTS) end
+  if d.upbringing == nil or d.upbringing == "random" then d.upbringing = pick(ns.UPBRINGINGS) end
+  if d.drive == nil or d.drive == "random" then d.drive = pick(ns.DRIVES) end
+  local homes = Sim.homelandsFor(race)
+  local okHome = false
+  for _, h in ipairs(homes) do if h[1] == d.homeland then okHome = true end end
+  if not okHome then d.homeland = homes[1] and pick(homes)[1] or nil end
+  if d.pace == nil or d.pace == "random" then d.pace = math.random(2, 6) end
+  local name = (d.name or ""):match("^%s*(.-)%s*$")
+  taken = taken or {}
+  if name == "" then
+    local pool = {}
+    for _, n in ipairs(NAMES[race]) do if not taken[n] then pool[#pool + 1] = n end end
+    name = #pool > 0 and pick(pool) or (pick(NAMES[race]) .. math.random(2, 9))
+  elseif taken[name] then name = name .. math.random(2, 9) end
+  d.name = name
+  return d
+end
+
+local function fakes() ns.cdb.simFakes = ns.cdb.simFakes or {} return ns.cdb.simFakes end
+function Sim.fakeCount() local n = 0 for i = 1, 4 do if fakes()[i] then n = n + 1 end end return n end
+
+------------------------------------------------------------------------
+-- The pretend party
+------------------------------------------------------------------------
+local frame, msgs, run, snapshot, simSnap, ticker
+local actors, userActor, byName
+local details = false
+
+local function clock(vt) vt = math.floor(vt or 0) return ("%d:%02d"):format(math.floor(vt / 60), vt % 60) end
+local function say(text, r, g, b)
+  if msgs then msgs:AddMessage(text, r or 1, g or 1, b or 1) end
+end
+local function stamp() return run and ("|cff888888[" .. clock(run.vt) .. "]|r ") or "" end
+
+-- lines as the default chat window writes them (ns.profile is whoever is speaking right now)
+local function chatLine(channel, text)
+  local name = ns.profile and ns.profile.name or "You"
+  if channel == "YELL" then say(("%s%s yells: %s"):format(stamp(), name, text), 1, 0.25, 0.25)
+  elseif channel == "EMOTE" then say(("%s%s %s"):format(stamp(), name, text), 1, 0.5, 0.25)
+  else say(("%s%s says: %s"):format(stamp(), name, text), 1, 1, 1) end
+end
+
+local function byArch(class)
+  local cls = CROX2_ABILITIES and CROX2_ABILITIES[class or ""] or {}
   local by = {}
   for name, a in pairs(cls) do
     if not a.quiet and a.arch then by[a.arch] = by[a.arch] or {}; table.insert(by[a.arch], name) end
@@ -44,9 +142,13 @@ local function foeTarget(r)
   return {exists = true, name = r.foe, enemy = true, friend = false, self = false, player = false, ctype = "humanoid",
     hp = r.foeHp, dead = r.foeHp <= 0, casting = r.casting, guid = "sim-" .. r.pull}
 end
-local function selfTarget(r)
-  return {exists = true, name = ns.profile and ns.profile.name, enemy = false, friend = false, self = true, player = true,
-    hp = r.hp, dead = false, casting = false, guid = "sim-self"}
+local function selfTarget(a)
+  return {exists = true, name = a.name, enemy = false, friend = false, self = true, player = true,
+    hp = a.hp, dead = false, casting = false, guid = "sim-self-" .. a.name}
+end
+local function allyTarget(b)
+  return {exists = true, name = b.name, enemy = false, friend = true, self = false, player = true,
+    hp = b.hp, dead = false, casting = false, guid = "sim-ally-" .. b.name}
 end
 
 -- a believable button to press right now: mostly fillers and heavy hits, finishers when the foe is low, a heal when you are
@@ -78,121 +180,481 @@ function Sim.pickAbility(r)
   return cands[#cands]
 end
 
+local function anyOf(a, archs)
+  local names = {}
+  for _, arch in ipairs(archs) do for _, n in ipairs(a.by[arch] or {}) do names[#names + 1] = n end end
+  if #names == 0 then return nil end
+  return pick(names)
+end
+
+-- what this character presses next: a reply someone is waiting for, a heal on a hurt ally, or the usual fight
+local function choose(a, t)
+  local G = ns.G
+  local pr = G and G.simPending and G.simPending()
+  if pr and t - pr.t <= 6 then
+    local caller = byName[pr.caller]
+    if caller and caller ~= a then
+      if pr.kind == "lowhealth" then
+        local n = anyOf(a, {"heal", "clutch", "ward"})
+        if n then return {name = n, tgt = allyTarget(caller), heal = caller} end
+      elseif pr.kind == "debuffhelp" then
+        local n = anyOf(a, {"cleanse"})
+        if n then return {name = n, tgt = allyTarget(caller)} end
+      elseif pr.kind == "getoff" then
+        local n = anyOf(a, {"taunt"})
+        if n then return {name = n, tgt = foeTarget(run)} end
+      end
+    end
+  end
+  -- a healer looks after whoever is hurt
+  if a.canHeal and actors and #actors > 1 then
+    local low
+    for _, b in ipairs(actors) do
+      if b ~= a and b.hp < 55 and (not low or b.hp < low.hp) then low = b end
+    end
+    if low and math.random() < 0.6 then
+      local n = anyOf(a, low.hp < 35 and {"clutch", "heal", "ward"} or {"heal", "ward", "groupheal"})
+      if n then return {name = n, tgt = allyTarget(low), heal = low} end
+    end
+  end
+  local c = Sim.pickAbility({by = a.by, foeHp = run.foeHp, hp = a.hp, casting = run.casting})
+  if not c then return nil end
+  return {name = c.name, tgt = c.selfCast and selfTarget(a) or foeTarget(run), selfHeal = c.selfCast and a}
+end
+
 local function setStatus(text) if frame and frame.status then frame.status:SetText(text) end end
+
+local function flush()
+  local G = ns.G
+  if G and G.simFlush and ns.simParty then
+    G.simFlush(function(from, msg)
+      for _, b in ipairs(actors) do
+        if b ~= from then
+          ns.simBecome(b)
+          local ok, err = pcall(G.simReceive, from.name, msg)
+          if not ok and ns.Bug then ns.Bug.capture(err) end
+        end
+      end
+    end)
+  end
+  ns.simBecome(userActor)
+end
+
+local function refreshRoster(t)
+  local G = ns.G
+  for _, a in ipairs(actors) do
+    for _, b in ipairs(actors) do
+      if b ~= a then
+        local m = a.g.members[b.name]
+        if not m then m = {} a.g.members[b.name] = m end
+        m.class, m.ver, m.proto = b.profile.class, ns.VERSION, G.PROTO
+        m.level = m.level or b.cdb.raidChatty
+        m.flags, m.flagsT, m.seen = b.flags, t, t
+      end
+    end
+  end
+end
+
+local function makeActor(name, profile, cdbT, user)
+  local topSpec, band = nil, 0
+  for tree, b in pairs(profile.spec or {}) do if b > band then topSpec, band = tree, b end end
+  local flags = ns.G.simFlags(profile.class, topSpec)
+  return {name = name, user = user, profile = profile, cdb = cdbT, db = user and nil or {custom = {}},
+    state = ns.simFreshState(), g = ns.G.simFresh(), by = byArch(profile.class), flags = flags,
+    tank = flags:find("K", 1, true) ~= nil, canHeal = flags:find("H", 1, true) ~= nil,
+    sim = {tgt = {exists = false}, hp = 100, hurt = false}, hp = 100}
+end
+
+local function fakeActor(def)
+  local profile = {name = def.name, class = def.class, race = def.race, raceFile = RACE_FILE[def.race], faction = "Horde",
+    spec = {[def.spec] = def.depth}, profs = {}}
+  local c = ns.simNewCharDB({temperament = def.temperament, upbringing = def.upbringing, drive = def.drive,
+    homeland = def.homeland, pronouns = def.pronouns, raidChatty = def.pace, chatty = math.min(5, def.pace), setupDone = true})
+  return makeActor(def.name, profile, c, false)
+end
 
 local function startPull(t)
   run.pull = run.pull + 1
   run.foe = FOES[math.random(#FOES)]
-  run.foeHp, run.hp, run.casting, run.killed = 100, 100, false, false
+  run.foeHp, run.casting, run.killed = 100, false, false
   run.start = t
-  run.nextPress = t + 0.8
-  run.nextHurt = t + 5 + math.random() * 6
   run.phase = "fight"
-  ns.sim = {tgt = foeTarget(run), hp = run.hp, hurt = false}
-  ns.simFight(true)
-  say(("-- Pull %d: %s --"):format(run.pull, run.foe), 0.7, 0.7, 0.7)
+  for i, a in ipairs(actors) do
+    ns.simBecome(a)
+    a.hp = 100
+    a.hurtAt = -100
+    a.nextPress = t + 0.8 + (i - 1) * 0.35 + math.random() * 0.5
+    a.nextHurt = t + (a.tank and 3 or 5) + math.random() * 6
+    a.nextDebuff = t + 20 + math.random() * 40
+    a.nextThreat = t + 12 + math.random() * 20
+    a.threatUntil = 0
+    a.sim.tgt, a.sim.hp, a.sim.hurt, a.sim.onMe = foeTarget(run), 100, false, false
+    ns.simFight(true)
+  end
+  ns.simBecome(userActor)
+  say(("%s-- Pull %d: %s --"):format(stamp(), run.pull, run.foe), 0.7, 0.7, 0.7)
 end
 
 local function endPull(t)
-  ns.simFight(false)
-  ns.sim = {tgt = {exists = false}, hp = 100, hurt = false}
+  for _, a in ipairs(actors) do
+    ns.simBecome(a)
+    a.sim.tgt, a.sim.onMe = {exists = false}, false
+    ns.simFight(false)
+  end
+  ns.simBecome(userActor)
   if run.pull >= run.scen.pulls then Sim.stop(true) return end
   run.phase = "rest"
   run.nextAt = t + REST
 end
 
-local function press(t)
-  local c = Sim.pickAbility(run)
+local function pressFor(a, t)
+  local c = choose(a, t)
   if not c then return end
-  ns.sim.tgt = c.selfCast and selfTarget(run) or foeTarget(run)
-  ns.sim.hp = run.hp
-  ns.sim.hurt = (t - (run.hurtAt or -100)) < 3
-  if details then say("   > " .. c.name, 0.45, 0.6, 0.9) end
+  a.sim.tgt = c.tgt
+  a.sim.hp = a.hp
+  a.sim.hurt = (t - (a.hurtAt or -100)) < 3
+  if details then say(("%s   %s > %s"):format(stamp(), a.name, c.name), 0.45, 0.6, 0.9) end
   local ok, err = pcall(ns.simPress, c.name)
   if not ok and ns.Bug then ns.Bug.capture(err) end
+  if c.heal then c.heal.hp = math.min(100, c.heal.hp + 30) end
+  if c.selfHeal then a.hp = math.min(100, a.hp + 18) end
 end
 
--- advance the pretend fight; the ticker calls this a few times a second
-function Sim.tick()
+local function stepActor(a, t, elapsed)
+  ns.simBecome(a)
+  local s = a.sim
+  if not run.killed and t >= a.nextHurt then
+    a.hp = math.max(8, a.hp - ((a.tank and 12 or 15) + math.random() * 25))
+    a.hurtAt = t
+    ns.simHurt()
+    a.nextHurt = t + (a.tank and 4 or 6) + math.random() * (a.tank and 5 or 8)
+  elseif a.hp < 100 then
+    a.hp = math.min(100, a.hp + 0.4)
+  end
+  s.hp = a.hp
+  s.hurt = (t - (a.hurtAt or -100)) < 3
+  -- an enemy on someone who is not the tank (only when the party has a tank)
+  if not run.killed and run.hasTank and not a.tank and t >= a.nextThreat then
+    a.threatUntil = t + 8
+    a.nextThreat = t + 30 + math.random() * 30
+  end
+  s.onMe = (a.threatUntil or 0) > t
+  local force
+  if not run.killed and t >= a.nextDebuff then
+    ns.simDebuff(pick({"Poison", "Disease", "Curse", "Magic"}))
+    a.nextDebuff = t + 40 + math.random() * 60
+    force = true
+  end
+  if force or t >= a.nextPress then
+    pressFor(a, t)
+    a.nextPress = t + 1.4 + math.random() * 0.5
+  end
+  flush()
+end
+
+-- advance the pretend fight by one step (a quarter of a pretend second)
+function Sim.step()
   if not run then return end
-  local t = ns.now()
+  run.vt = run.vt + STEP
+  ns.simClock = run.clock0 + run.vt
+  ns.simWallAdd = run.vt
+  local t = ns.simClock
+  if t >= run.nextRoster then refreshRoster(t) run.nextRoster = t + 4 end
   if run.phase == "rest" then
-    setStatus(("Resting · next pull in %ds"):format(math.max(0, math.ceil(run.nextAt - t))))
+    setStatus(("Resting · next pull in %ds · %s"):format(math.max(0, math.ceil(run.nextAt - t)), SPEEDS[run.speed][2]))
     if t >= run.nextAt then startPull(t) end
     return
   end
   local elapsed = t - run.start
-  run.foeHp = math.max(0, 100 - 100 * elapsed / run.scen.dur + (math.random() - 0.5) * 3)
-  if run.killed then run.foeHp = 0 end
-  if t >= run.nextHurt then
-    run.hp = math.max(8, run.hp - (15 + math.random() * 25))
-    run.hurtAt = t
-    ns.simHurt()
-    run.nextHurt = t + 6 + math.random() * 8
-  elseif run.hp < 100 then
-    run.hp = math.min(100, run.hp + 0.4)
-  end
+  run.foeHp = run.killed and 0 or math.max(0, 100 - 100 * elapsed / run.scen.dur + (math.random() - 0.5) * 3)
   run.casting = math.random() < 0.08
+  run.rot = (run.rot + 1) % #actors
+  for k = 0, #actors - 1 do
+    stepActor(actors[(run.rot + k) % #actors + 1], t, elapsed)
+    if not run then return end
+  end
+  ns.simBecome(userActor)
   if not run.killed and elapsed >= run.scen.dur then
-    run.killed = true
-    run.foeHp = 0
-    ns.simKill(run.foe)
-    run.nextPress = t + 1.0
+    run.killed, run.killAt, run.foeHp = true, t, 0
+    for _, a in ipairs(actors) do
+      ns.simBecome(a)
+      ns.simKill(run.foe)
+      a.nextPress = math.min(a.nextPress, t + 0.5 + math.random() * 1.5)
+    end
+    ns.simBecome(userActor)
   end
-  if t >= run.nextPress then
-    press(t)
-    run.nextPress = t + 1.4 + math.random() * 0.5
-    if run.killed then endPull(t) return end
+  if run.killed and t >= run.killAt + 3.5 then endPull(t) return end
+  if run then
+    setStatus(("Pull %d of %d · %s · %s · budget %.1f"):format(run.pull, run.scen.pulls, clock(elapsed), SPEEDS[run.speed][2],
+      ns.getBudget and ns.getBudget() or 0))
   end
-  setStatus(("Pull %d of %d · %d:%02d · budget %.1f"):format(run.pull, run.scen.pulls, math.floor(elapsed / 60), math.floor(elapsed % 60),
-    ns.getBudget and ns.getBudget() or 0))
+end
+
+-- the real-time heartbeat: runs as many pretend steps as the speed allows. Instant runs the whole thing at once.
+function Sim.tick()
+  if not run then return end
+  local sp = SPEEDS[run.speed] or SPEEDS[1]
+  if sp[3] == 0 then
+    local n = 0
+    while run and n < 40000 do Sim.step() n = n + 1 end
+  else
+    for _ = 1, math.max(1, math.floor(sp[3] * REAL_TICK / STEP + 0.5)) do if run then Sim.step() end end
+  end
 end
 
 function Sim.running() return run ~= nil end
+function Sim.setSpeed(i) if SPEEDS[i] then if frame then frame.speed = i end if run then run.speed = i end end end
 
-function Sim.start(scenario)
+function Sim.start(scenario, speed)
   if run then return end
   if not ns.cdb or not ns.cdb.on then say("cro/x is switched off for this character. Turn it on first (/x on).", 1, 0.5, 0.5) return end
   if ns.isAlliance and ns.isAlliance() then return end
   if InCombatLockdown and InCombatLockdown() then say("You are in a real fight. Try again when it's over.", 1, 0.5, 0.5) return end
   local scen = SCENARIOS[scenario or (frame and frame.scenario) or 1] or SCENARIOS[1]
+  speed = speed or (frame and frame.speed) or 1
   snapshot = ns.simSnapshot()
-  run = {scen = scen, pull = 0, by = byArch(), phase = "rest", nextAt = ns.now(), foeHp = 100, hp = 100, casting = false}
-  ns.sim = {tgt = {exists = false}, hp = 100, hurt = false}
+  local G = ns.G
+  -- the pretend clock starts where the real one is, and only ever moves when the sim steps
+  local clock0 = GetTime()
+  ns.simClock, ns.simWallAdd = clock0, 0
+  userActor = makeActor(ns.profile.name or "You", {}, ns.cdb, true)
+  simSnap = ns.simBegin(userActor)
+  userActor.by = byArch(userActor.profile.class)
+  local topSpec, band = nil, 0
+  for tree, b in pairs(userActor.profile.spec or {}) do if b > band then topSpec, band = tree, b end end
+  userActor.flags = G.simFlags(userActor.profile.class, topSpec)
+  userActor.tank = userActor.flags:find("K", 1, true) ~= nil
+  userActor.canHeal = userActor.flags:find("H", 1, true) ~= nil
+  actors, byName = {userActor}, {[userActor.name] = userActor}
+  local taken = {[userActor.name] = true}
+  local names = {}
+  for i = 1, 4 do
+    local d = fakes()[i]
+    if d then
+      d = Sim.resolve(d, taken)
+      taken[d.name] = true
+      local a = fakeActor(d)
+      actors[#actors + 1] = a
+      byName[a.name] = a
+      names[#names + 1] = ("%s (%s %s)"):format(a.name, d.race, cap(d.class))
+    end
+  end
+  ns.simParty = #actors > 1 and actors or nil
+  G.simResetParty()
+  local hasTank = false
+  for _, a in ipairs(actors) do if a.tank then hasTank = true end end
+  run = {scen = scen, pull = 0, phase = "rest", nextAt = clock0, foeHp = 100, casting = false, vt = 0, clock0 = clock0,
+    speed = speed, rot = 0, nextRoster = clock0, hasTank = hasTank}
   ns.simOut = chatLine
   ns.simQuiet = function(ctx, moment, why)
-    if details then say(("   (quiet: %s - %s)"):format(ctx and ctx.ability or moment or "?", why or "?"), 0.55, 0.55, 0.55) end
+    if details then
+      say(("%s   (%s quiet: %s - %s)"):format(stamp(), ns.simActor and ns.simActor.name or "?", ctx and ctx.ability or moment or "?", why or "?"), 0.55, 0.55, 0.55)
+    end
   end
-  say(("-- Simulating: %s as %s --"):format(scen[2], ns.profile and ns.profile.name or "you"), 0.7, 0.7, 0.7)
-  if C_Timer and C_Timer.NewTicker then ticker = C_Timer.NewTicker(0.25, function() Sim.tick() end) end
+  refreshRoster(clock0)
+  ns.simBecome(userActor)
+  say(("-- Simulating: %s as %s, %s, %s --"):format(scen[2], userActor.name, SPEEDS[speed][2] == "Instant" and "instantly" or ("at " .. SPEEDS[speed][2]),
+    #names > 0 and ("in a party with " .. table.concat(names, ", ")) or "alone"), 0.7, 0.7, 0.7)
+  if C_Timer and C_Timer.NewTicker then ticker = C_Timer.NewTicker(REAL_TICK, function() Sim.tick() end) end
   if frame and frame.go then frame.go:SetText("Stop") end
-  Sim.tick()
+  Sim.step()
+  if SPEEDS[speed][3] == 0 then Sim.tick() end      -- instant: play it all now
 end
 
 function Sim.stop(finished)
   if not run then return end
   if ticker and ticker.Cancel then ticker:Cancel() end
   ticker = nil
-  if ns.inCombat and ns.sim then ns.simFight(false) end
+  for _, a in ipairs(actors) do
+    ns.simBecome(a)
+    if ns.inCombat then ns.simFight(false) end
+  end
   run = nil
-  ns.sim, ns.simOut, ns.simQuiet = nil, nil, nil
+  ns.simOut, ns.simQuiet = nil, nil
+  ns.simEnd(simSnap, userActor)
+  if ns.G then ns.G.simResetParty() end
   ns.simRestore(snapshot)
-  snapshot = nil
+  snapshot, simSnap, actors, userActor, byName = nil, nil, nil, nil, nil
   say(finished and "-- Done. Your test data is in /x testdata if testing mode was on. --" or "-- Stopped. --", 0.7, 0.7, 0.7)
   setStatus("Idle")
   if frame and frame.go then frame.go:SetText("Start") end
 end
 
+------------------------------------------------------------------------
+-- The window: chat area, controls, the f.u. boxes and the fake-user popup
+------------------------------------------------------------------------
+local function fakeLabel(d)
+  return ("%s - %s %s"):format(d.name, d.race, cap(d.class))
+end
+
+local function refreshBoxes()
+  if not frame then return end
+  for i, b in ipairs(frame.boxes) do
+    local d = fakes()[i]
+    b:SetText(d and ("|cffffd100" .. i .. " f.u.|r") or (i .. " f.u."))
+  end
+end
+
+local function buildPopup(f)
+  local pop = CreateFrame("Frame", nil, f)
+  pop:SetSize(470, 318)
+  pop:SetPoint("CENTER", f, "CENTER", 0, 4)
+  pop:SetFrameLevel((f:GetFrameLevel() or 1) + 30)
+  pop:EnableMouse(true)
+  local bg = pop:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(0.04, 0.03, 0.02, 0.97)
+  for _, e in ipairs({{"TOPLEFT", "TOPRIGHT", nil, 2}, {"BOTTOMLEFT", "BOTTOMRIGHT", nil, 2}, {"TOPLEFT", "BOTTOMLEFT", 2}, {"TOPRIGHT", "BOTTOMRIGHT", 2}}) do
+    local t = pop:CreateTexture(nil, "BORDER")
+    t:SetColorTexture(0.72, 0.56, 0.16, 1)
+    t:SetPoint(e[1], pop, e[1])
+    t:SetPoint(e[2], pop, e[2])
+    if e[3] then t:SetWidth(e[3]) else t:SetHeight(e[4]) end
+  end
+  pop.title = W.heading(pop, "")
+  pop.title:SetPoint("TOPLEFT", 14, -12)
+  local sub = W.hint(pop, "Pick anything, or leave it on Random. Only combinations the game allows are offered.")
+  sub:SetPoint("TOPLEFT", 14, -30)
+  local d = {}
+  pop.def = d
+
+  local dds = {}
+  local function refreshAll() for _, dd in ipairs(dds) do dd.refresh() end end
+  local function label(text, x, y)
+    local l = W.text(pop, text, "GameFontNormalSmall")
+    l:SetPoint("TOPLEFT", x, y - 6)
+    l:SetWidth(78)
+    return l
+  end
+  local function dropdown(key, text, x, y, items, onSet)
+    label(text, x, y)
+    local dd = W.dropdown(pop, 112, items, function() return d[key] end, function(v)
+      d[key] = v
+      if onSet then onSet(v) end
+      refreshAll()
+    end)
+    dd:SetPoint("TOPLEFT", x + 80, y + 2)
+    dds[#dds + 1] = dd
+    return dd
+  end
+  local RANDOM = {"random", "Random"}
+  local function listWith(list)
+    local out = {RANDOM}
+    for _, it in ipairs(list) do out[#out + 1] = it end
+    return out
+  end
+  local function keys(list, label2)
+    local out = {}
+    for _, k in ipairs(list) do out[#out + 1] = {k, label2 and label2(k) or cap(k)} end
+    return listWith(out)
+  end
+
+  -- name
+  label("Name", 14, -52)
+  local nameBox = W.edit(pop, 130, 20)
+  nameBox:SetPoint("TOPLEFT", 96, -52)
+  nameBox:SetScript("OnTextChanged", function(self) d.name = self:GetText() end)
+  local nh = W.hint(pop, "(blank = a random name)")
+  nh:SetPoint("LEFT", nameBox, "RIGHT", 8, 0)
+  pop.nameBox = nameBox
+
+  local y0 = -84
+  local H = 34
+  dropdown("race", "Race", 14, y0, function() return keys(Sim.RACES) end, function(v)
+    if v ~= "random" and d.class ~= "random" and not has(Sim.RACE_CLASSES[v], d.class) then d.class = "random" d.spec = "random" end
+    local ok = false
+    for _, h in ipairs(Sim.homelandsFor(v ~= "random" and v or nil)) do if h[1] == d.homeland then ok = true end end
+    if not ok then d.homeland = "random" end
+  end)
+  dropdown("class", "Class", 14, y0 - H, function()
+    local list = {}
+    for _, c in ipairs(Sim.classesFor(d.race ~= "random" and d.race or nil)) do list[#list + 1] = c end
+    return keys(list)
+  end, function(v)
+    if v == "random" or not has((ns.SPEC_ORDER or {})[v], d.spec) then d.spec = "random" end
+  end)
+  dropdown("spec", "Talent spec", 14, y0 - H * 2, function()
+    if d.class == "random" then return {RANDOM} end
+    return keys((ns.SPEC_ORDER or {})[d.class] or {}, function(k) return k end)
+  end)
+  dropdown("depth", "Talents spent", 14, y0 - H * 3, function()
+    return {RANDOM, {1, "Early"}, {2, "Middle"}, {3, "Deep"}}
+  end)
+  dropdown("pronouns", "Pronouns", 14, y0 - H * 4, function() return listWith(PRONOUNS) end)
+
+  dropdown("temperament", "Temperament", 236, y0, function() return keys(ns.TEMPERAMENTS) end)
+  dropdown("upbringing", "Origin", 236, y0 - H, function() return keys(ns.UPBRINGINGS) end)
+  dropdown("drive", "Motivation", 236, y0 - H * 2, function() return keys(ns.DRIVES) end)
+  dropdown("homeland", "Homeland", 236, y0 - H * 3, function()
+    return listWith(Sim.homelandsFor(d.race ~= "random" and d.race or nil))
+  end)
+  dropdown("pace", "Pace in a group", 236, y0 - H * 4, function()
+    local out = {RANDOM}
+    for i = 1, 7 do out[#out + 1] = {i, ns.CHATTY[i].name} end
+    return out
+  end)
+
+  function pop:load(slot)
+    self.slot = slot
+    local cur = fakes()[slot]
+    for k in pairs(d) do d[k] = nil end
+    for _, k in ipairs({"race", "class", "spec", "depth", "pronouns", "temperament", "upbringing", "drive", "homeland", "pace"}) do d[k] = "random" end
+    if cur then for k, v in pairs(cur) do d[k] = v end end
+    d.name = cur and cur.name or ""
+    nameBox:SetText(d.name)
+    self.title:SetText(("Fake user %d (f.u. %d)"):format(slot, slot))
+    refreshAll()
+  end
+  function pop:randomizeAll()
+    for _, k in ipairs({"race", "class", "spec", "depth", "pronouns", "temperament", "upbringing", "drive", "homeland", "pace"}) do d[k] = "random" end
+    d.name = ""
+    nameBox:SetText("")
+    refreshAll()
+  end
+  local function others()
+    local taken = {[ns.profile and ns.profile.name or ""] = true}
+    for i = 1, 4 do if i ~= pop.slot and fakes()[i] then taken[fakes()[i].name] = true end end
+    return taken
+  end
+  local rnd = W.button(pop, "Randomize all", 110, function() pop:randomizeAll() end)
+  rnd:SetPoint("BOTTOMLEFT", 14, 14)
+  local done = W.button(pop, "Done", 80, function()
+    fakes()[pop.slot] = Sim.resolve(d, others())
+    pop:Hide()
+    refreshBoxes()
+    if frame and frame.boxTip then frame.boxTip() end
+  end)
+  done:SetPoint("BOTTOMRIGHT", -14, 14)
+  local cancel = W.button(pop, "Cancel", 80, function() pop:Hide() end)
+  cancel:SetPoint("RIGHT", done, "LEFT", -6, 0)
+  local remove = W.button(pop, "Remove", 80, function()
+    fakes()[pop.slot] = nil
+    pop:Hide()
+    refreshBoxes()
+  end)
+  remove:SetPoint("RIGHT", cancel, "LEFT", -6, 0)
+  pop:Hide()
+  return pop
+end
+
+function Sim.editFake(slot)
+  if run then say("Stop the simulation before changing the party.", 1, 0.5, 0.5) return end
+  if not frame then Sim.open() end
+  if not frame.popup then frame.popup = buildPopup(frame) end
+  frame.popup:load(slot)
+  frame.popup:Show()
+end
+
 function Sim.open()
   if ns.isAlliance and ns.isAlliance() then return end
   if not frame then
-    local f = W.panel("CROX2SimFrame", "cro/x - combat simulator", 520, 340)
+    local f = W.panel("CROX2SimFrame", "cro/x - combat simulator", 560, 440)
     frame = f
-    f.scenario = 1
+    f.scenario, f.speed = 1, 1
     -- the chat-style area
     local chat = CreateFrame("Frame", nil, f)
     chat:SetPoint("TOPLEFT", 12, -52)
-    chat:SetPoint("BOTTOMRIGHT", -12, 76)
+    chat:SetPoint("BOTTOMRIGHT", -12, 138)
     local bg = chat:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
     bg:SetColorTexture(0, 0, 0, 0.55)
@@ -211,36 +673,74 @@ function Sim.open()
     msgs:SetPoint("BOTTOMRIGHT", -6, 6)
     msgs:SetFontObject("ChatFontNormal")
     msgs:SetJustifyH("LEFT")
-    msgs:SetMaxLines(300)
+    msgs:SetMaxLines(500)
     msgs:SetFading(false)
     msgs:EnableMouseWheel(true)
     msgs:SetScript("OnMouseWheel", function(self, d) if d > 0 then self:ScrollUp() else self:ScrollDown() end end)
     f.msgs = msgs
-    -- controls
-    local dd = W.dropdown(f, 190, function()
+
+    -- fake users: four boxes, each opens the popup to build that character
+    local fl = W.text(f, "Fake Users:", "GameFontNormal")
+    fl:SetPoint("BOTTOMLEFT", 14, 108)
+    f.boxes = {}
+    for i = 1, 4 do
+      local b = W.button(f, i .. " f.u.", 80, function() Sim.editFake(i) end)
+      if i == 1 then b:SetPoint("LEFT", fl, "RIGHT", 10, 0) else b:SetPoint("LEFT", f.boxes[i - 1], "RIGHT", 6, 0) end
+      b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        local d = fakes()[i]
+        GameTooltip:SetText(i .. " f.u.", 1, 0.82, 0)
+        if d then
+          GameTooltip:AddLine(fakeLabel(d), 1, 1, 1)
+          GameTooltip:AddLine(("%s, %s, %s. %s pace in a group."):format(cap(d.temperament), cap(d.upbringing), cap(d.drive),
+            ns.CHATTY[d.pace] and ns.CHATTY[d.pace].name or "?"), 0.8, 0.8, 0.8, true)
+          GameTooltip:AddLine("Click to change or remove.", 0.6, 0.6, 0.6)
+        else
+          GameTooltip:AddLine("Click to build a fake party member. The sim plays them as a full cro/x character.", 1, 1, 1, true)
+        end
+        GameTooltip:Show()
+      end)
+      b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+      f.boxes[i] = b
+    end
+
+    -- scenario, speed, start
+    local dd = W.dropdown(f, 170, function()
       local t = {}
       for i, s in ipairs(SCENARIOS) do t[i] = {s[1], s[2]} end
       return t
     end, function() return f.scenario end, function(v) f.scenario = v end)
-    dd:SetPoint("BOTTOMLEFT", 12, 44)
+    dd:SetPoint("BOTTOMLEFT", 2, 50)
     f.dd = dd
-    local go = W.button(f, "Start", 80, function() if run then Sim.stop() else Sim.start(f.scenario) end end)
-    go:SetPoint("LEFT", dd, "RIGHT", 6, 0)
+    local sp = W.dropdown(f, 66, function()
+      local t = {}
+      for i, s in ipairs(SPEEDS) do t[i] = {s[1], s[2]} end
+      return t
+    end, function() return f.speed end, function(v) Sim.setSpeed(v) end)
+    sp:SetPoint("LEFT", dd, "RIGHT", -14, 0)
+    f.sp = sp
+    local sl = W.hint(f, "Speed")
+    sl:SetPoint("BOTTOM", sp, "TOP", 0, -2)
+    local go = W.button(f, "Start", 76, function() if run then Sim.stop() else Sim.start(f.scenario, f.speed) end end)
+    go:SetPoint("LEFT", sp, "RIGHT", -6, 2)
     f.go = go
-    local clear = W.button(f, "Clear", 70, function() msgs:Clear() end)
+    local clear = W.button(f, "Clear", 64, function() msgs:Clear() end)
     clear:SetPoint("LEFT", go, "RIGHT", 6, 0)
     local det = W.check(f, "Show presses and why it stayed quiet", function(_, on) details = on and true or false end)
     det:SetPoint("BOTTOMLEFT", 12, 14)
     f.det = det
     f.status = W.hint(f, "Idle")
     f.status:SetPoint("BOTTOMRIGHT", -14, 20)
-    f:HookScript("OnHide", function() Sim.stop() end)
+    f:HookScript("OnHide", function() Sim.stop() if f.popup then f.popup:Hide() end end)
   end
   frame:Show()
   frame.dd.refresh()
+  frame.sp.refresh()
+  refreshBoxes()
   if not frame.welcomed then
     frame.welcomed = true
     say("Pretend fights run through your character's real lines. Nothing here goes to chat.", 0.7, 0.7, 0.7)
+    say("The sim keeps its own clock: pick 2x, 4x, 6x or Instant. Click an f.u. box to add a fake party member.", 0.7, 0.7, 0.7)
     say("Pick a fight and press Start. Turn on testing mode in Options to keep the data.", 0.7, 0.7, 0.7)
   end
 end

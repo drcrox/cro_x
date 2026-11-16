@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.45"
+local BUILD = "0.57-alpha2.46"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -20,8 +20,9 @@ local db, cdb                 -- account / character saved settings
 ------------------------------------------------------------------------
 local function p(s) DEFAULT_CHAT_FRAME:AddMessage("|cffb22222cro/x:|r " .. s) end
 local function secret(v) return issecretvalue and issecretvalue(v) or false end
-local function now() return GetTime() end
-local function wall() return (time and time()) or math.floor(GetTime()) end
+-- ns.simClock is the combat simulator's pretend clock (seconds); it is nil in real play
+local function now() return ns.simClock or GetTime() end
+local function wall() return ((time and time()) or math.floor(GetTime())) + (ns.simWallAdd or 0) end
 local function trim(s) return (s or ""):match("^%s*(.-)%s*$") end
 local function safe(fn, ...)
   if not fn then return nil end
@@ -51,7 +52,7 @@ local DRIVES = {"honor", "coin", "vengeance", "faith", "glory", "duty"}
 ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
-  profLines = true, testing = false, lineHide = {},
+  profLines = true, testing = false, lineHide = {}, simFakes = {},
   on = true, chatty = 3, raidChatty = 3, chattyScale = 3, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
@@ -122,6 +123,8 @@ local SPEC_ORDER = {
   MAGE = {"Arcane", "Fire", "Frost"}, WARLOCK = {"Affliction", "Demonology", "Destruction"},
   DRUID = {"Balance", "Feral", "Restoration"},
 }
+
+ns.SPEC_ORDER = SPEC_ORDER
 
 local function addProf(out, name)
   name = str(name)
@@ -270,6 +273,7 @@ local healthLast, hurtAt = nil, -100
 local stealthBefore = false
 
 local function pct(unit)
+  if ns.sim and unit == "player" then return ns.sim.hp end       -- the simulator's pretend health
   local h, m = safe(UnitHealth, unit), safe(UnitHealthMax, unit)
   if secret(h) or secret(m) or type(h) ~= "number" or type(m) ~= "number" or m <= 0 then return nil end
   return h / m * 100
@@ -332,7 +336,7 @@ local function makeCtx(ability, info, item)
   ctx.hp = ns.sim and ns.sim.hp or pct("player")
   ctx.hurt = ns.sim and ns.sim.hurt or (now() - hurtAt) < 3
   ctx.stealth = stealthBefore
-  ctx.group = bool(safe(IsInGroup)) or false
+  ctx.group = ns.simParty ~= nil or bool(safe(IsInGroup)) or false
   ctx.raid = bool(safe(IsInRaid)) or false
   ctx.pet = bool(safe(UnitExists, "pet")) or false
   local outdoors = safe(IsOutdoors)
@@ -694,7 +698,7 @@ end
 -- the pace setting in force: any party or raid uses the group setting (stored as raidChatty), alone uses the solo one
 function ns.chattyNow()
   local c = ns.cdb or cdb
-  if bool(safe(IsInGroup)) or bool(safe(IsInRaid)) then return math.min(7, c.raidChatty or 3) end
+  if ns.simParty or bool(safe(IsInGroup)) or bool(safe(IsInRaid)) then return math.min(7, c.raidChatty or 3) end
   return math.min(SOLO_LEVELS, c.chatty or 3)
 end
 
@@ -1392,6 +1396,67 @@ function ns.simHurt() hurtAt = now() end
 function ns.simSnapshot() local c = {said = {}, last = {}} for k, v in pairs(cdb.said) do c.said[k] = v end for k, v in pairs(cdb.last) do c.last[k] = v end return c end
 function ns.simRestore(c) if c then cdb.said, cdb.last = c.said, c.last end end
 
+
+-- Fake users for the simulator. An actor is {profile, cdb, db, state, sim, user}: the line-picking code reads "the
+-- character" from the profile and cdb it holds, so becoming an actor swaps those (and the pace memory) in, and
+-- swapping back puts the real character back exactly as it was. Nothing here touches the real game or its saved data.
+function ns.simNewCharDB(over)
+  local t = {}
+  for k, v in pairs(over or {}) do t[k] = v end
+  fillDefaults(t, CHAR_DEFAULTS)
+  t.on, t.testing, t.logging = true, false, false
+  return t
+end
+local function paceGet()
+  return {budget = budget, budgetT = budgetT, lastSpoke = lastSpoke, hurtAt = hurtAt, killPending = killPending,
+    fightOpened = fightOpened, spoke = spokeTimes, debuffCall = lastDebuffCallout}
+end
+local function paceSet(st)
+  budget, budgetT, lastSpoke, hurtAt, killPending, fightOpened, spokeTimes, lastDebuffCallout =
+    st.budget, st.budgetT, st.lastSpoke, st.hurtAt, st.killPending, st.fightOpened, st.spoke, st.debuffCall or -100
+end
+function ns.simFreshState() return {budget = 1.0, budgetT = 0, lastSpoke = -1000, hurtAt = -100, spoke = {}, debuffCall = -100} end
+-- the simulator hands the current character a new debuff (dtype: Poison, Disease, Curse or Magic)
+local SIM_DEBUFF_NAMES = {Poison = "Serpent Sting", Disease = "Plague Cloud", Curse = "Curse of Agony", Magic = "Frost Nova"}
+function ns.simDebuff(dtype)
+  if #debuffQueue >= 5 then return end
+  debuffQueue[#debuffQueue + 1] = {pool = DEBUFF_POOL[dtype] or "debuff:physical", name = SIM_DEBUFF_NAMES[dtype] or "a debuff",
+    dtype = dtype, kind = DEBUFF_KIND[dtype], frost = false, t = now()}
+end
+local simCurrent
+-- begin: remember the real character's pace memory, to hand back at the end
+function ns.simBegin(userActor)
+  local snap = {state = paceGet(), g = ns.G and ns.G.simGet and ns.G.simGet(), actor = userActor, db = db}
+  userActor.profile = {}
+  for k, v in pairs(profile) do userActor.profile[k] = v end
+  userActor.cdb, userActor.db, userActor.state = cdb, db, ns.simFreshState()
+  simCurrent = nil
+  ns.simActor = nil
+  return snap
+end
+function ns.simBecome(a)
+  if simCurrent == a then return end
+  if simCurrent then
+    simCurrent.state = paceGet()
+    if ns.G and ns.G.simGet then simCurrent.g = ns.G.simGet() end
+  end
+  simCurrent, ns.simActor = a, a
+  if not a then return end
+  for k in pairs(profile) do profile[k] = nil end
+  for k, v in pairs(a.profile) do profile[k] = v end
+  cdb, ns.cdb = a.cdb, a.cdb
+  db, ns.db = a.db, a.db
+  paceSet(a.state)
+  ns.sim = a.sim
+  if ns.G and ns.G.simSet then ns.G.simSet(a.g) end
+end
+function ns.simEnd(snap, userActor)
+  ns.simBecome(userActor)
+  paceSet(snap.state)
+  if ns.G and ns.G.simSet and snap.g then ns.G.simSet(snap.g) end
+  simCurrent, ns.simActor, ns.sim = nil, nil, nil
+  ns.simClock, ns.simWallAdd, ns.simParty = nil, nil, nil
+end
 
 -- test helpers for the harness
 ns._test = {markTrue = markTrue, resolveArch = resolveArch, render = render, pick = pick, itemMoment = itemMoment,

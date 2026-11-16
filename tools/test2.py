@@ -646,3 +646,160 @@ check("cooking lines trigger on food", "using food" in r["text"], r["text"][:400
 check("no raw pronoun placeholders in samples", "[their]" not in r["text"] and "[they]" not in r["text"] and "[them]" not in r["text"], r["text"][:300])
 check("the sample window opens", r["shown"] == True, r)
 check("samples say when profession lines are off", "switched off" in r["offText"], r["offText"][:120])
+
+
+# --- simulator: virtual clock, speeds, fake users
+r = lua.eval('''function(ns, H)
+  local S = ns.Sim
+  local out = {}
+  -- race/class combinations
+  local bad, tauRogue, undHunt = 0, 0, 0
+  for i = 1, 300 do
+    local d = S.resolve({})
+    local ok = false
+    for _, c in ipairs(S.RACE_CLASSES[d.race]) do if c == d.class then ok = true end end
+    if not ok then bad = bad + 1 end
+  end
+  for i = 1, 100 do
+    local d = S.resolve({race = "Tauren", class = "ROGUE"})
+    if d.race == "Tauren" and d.class == "ROGUE" then tauRogue = tauRogue + 1 end
+    local e = S.resolve({race = "Forsaken", class = "HUNTER"})
+    if e.race == "Forsaken" and e.class == "HUNTER" then undHunt = undHunt + 1 end
+  end
+  out.bad, out.tauRogue, out.undHunt = bad, tauRogue, undHunt
+  local hunterRaces = {}
+  for i = 1, 100 do local d = S.resolve({class = "HUNTER"}) hunterRaces[d.race] = true end
+  out.hunterForsaken = hunterRaces.Forsaken == true
+  local d = S.resolve({race = "Skyborne"})
+  out.skyHome = d.homeland and d.homeland:find("^home:") ~= nil
+  out.named = d.name ~= "" and d.spec ~= nil and d.depth >= 1
+  -- a party: one warrior, one random, run instantly
+  local realName, realClass, realCdb, realProfile = ns.profile.name, ns.profile.class, ns.cdb, ns.profile
+  local realSaid = {}
+  for k, v in pairs(ns.cdb.said) do realSaid[k] = v end
+  ns.cdb.on = true ns.cdb.testing = false
+  ns.cdb.simFakes = {S.resolve({name = "Grukk", race = "Orc", class = "WARRIOR", pace = 5}), S.resolve({name = "Maren", race = "Forsaken", class = "PRIEST", pace = 4})}
+  S.open()
+  local lines = 0
+  local grukk, maren = 0, 0
+  local frame = CROX2SimFrame
+  local texts = {}
+  frame.msgs.AddMessage = function(_, text) texts[#texts + 1] = text end
+  local sent = #H.sent
+  local before = GetTime()
+  S.start(3, 4)                       -- five pulls, instantly
+  out.finishedAtOnce = not S.running()
+  out.clockUntouched = math.abs(GetTime() - before) < 0.001
+  out.nothingSent = #H.sent == sent
+  for _, l in ipairs(texts) do
+    if l:find("Grukk") then grukk = grukk + 1 end
+    if l:find("Maren") then maren = maren + 1 end
+  end
+  out.grukk, out.maren, out.total = grukk, maren, #texts
+  out.sample = texts[3] or ""
+  out.restored = ns.profile == realProfile and ns.profile.name == realName and ns.profile.class == realClass and ns.cdb == realCdb
+  out.noSimLeft = ns.simParty == nil and ns.simClock == nil and ns.simActor == nil and ns.sim == nil and ns.inCombat == false
+  local same = true
+  for k, v in pairs(realSaid) do if ns.cdb.said[k] ~= v then same = false end end
+  out.saidBack = same
+  ns.cdb.simFakes = {}
+  return out
+end''')(ns, H)
+r = dict(r)
+check("random fake users always get a combination the game allows", r["bad"] == 0, r)
+check("no Tauren rogues and no Forsaken hunters", r["tauRogue"] == 0 and r["undHunt"] == 0 and not r["hunterForsaken"], r)
+check("a fake user comes out complete", r["skyHome"] and r["named"], r)
+check("an instant party sim finishes at once, off the real clock, and sends nothing", r["finishedAtOnce"] and r["clockUntouched"] and r["nothingSent"], r)
+check("the fake users speak in the sim window", r["grukk"] > 0 and r["maren"] > 0, r)
+check("the real character is put back after a party sim", r["restored"] and r["noSimLeft"] and r["saidBack"], r)
+
+r = lua.eval('''function(ns, H)
+  local S = ns.Sim
+  local out = {}
+  ns.cdb.on = true
+  S.open()
+  S.setSpeed(1)
+  S.start(1, 1)
+  local c0 = ns.simClock
+  S.tick()                                -- 2x: one tick is two steps, half a pretend second
+  out.adv2 = ns.simClock - c0
+  S.setSpeed(3)
+  c0 = ns.simClock
+  S.tick()
+  out.adv6 = ns.simClock - c0
+  out.stillRunning = S.running()
+  S.stop()
+  return out
+end''')(ns, H)
+r = dict(r)
+check("2x advances half a pretend second a tick, 6x one and a half", abs(r["adv2"] - 0.5) < 0.01 and abs(r["adv6"] - 1.5) < 0.01, r)
+
+# the f.u. boxes and the popup
+r = lua.eval('''function(ns, H)
+  local S = ns.Sim
+  local out = {}
+  ns.cdb.simFakes = {}
+  S.open()
+  local f = CROX2SimFrame
+  out.boxes = #f.boxes
+  out.label = f.boxes[2]._text
+  f.boxes[2]:Click()
+  out.popup = f.popup ~= nil and f.popup._shown == true
+  f.popup.def.race = "Tauren"
+  f.popup.def.class = "ROGUE"
+  f.popup.def.name = "Bahru"
+  -- find the Done button by its text
+  local function find(frame)
+    for _, ch in ipairs(H.frames) do
+      if ch._parent == frame and ch._text == "Done" then return ch end
+    end
+  end
+  local done = find(f.popup)
+  out.hasDone = done ~= nil
+  if done then done:Click() end
+  local d = ns.cdb.simFakes[2]
+  out.saved = d ~= nil and d.name == "Bahru" and d.race == "Tauren" and d.class ~= "ROGUE"
+  out.closed = f.popup._shown ~= true
+  out.boxText = f.boxes[2]._text
+  ns.cdb.simFakes = {}
+  return out
+end''')(ns, H)
+r = dict(r)
+check("four f.u. boxes, the one clicked opens the popup", r["boxes"] == 4 and r["popup"], r)
+check("Done saves a legal character and closes the popup", r["hasDone"] and r["saved"] and r["closed"], r)
+
+# --- Setup page: Character tags tabs, with a box on what the character has
+r = lua.eval('''function(ns)
+  ns.openSection("home")
+  local s = ns._sections.home
+  s:layout(640)
+  local out = {tabs = 0}
+  for _, b in ipairs(s.tagTabs) do if b._shown then out.tabs = out.tabs + 1 end end
+  local function owned()
+    local list, n, total = {}, 0, 0
+    for _, c in ipairs(s.tagChips) do
+      if c._shown then
+        total = total + 1
+        if c.edges[1]._shown then n = n + 1 list[#list + 1] = c.name end
+      end
+    end
+    return n, total, table.concat(list, ",")
+  end
+  s.tagTab = "race"; s:layoutTags(640)
+  out.raceOwned, out.raceTotal, out.raceNames = owned()
+  s.tagTab = "temperament"; s:layoutTags(640)
+  out.tempOwned, out.tempTotal, out.tempNames = owned()
+  s.tagTab = "profs"; s:layoutTags(640)
+  out.profOwned, out.profTotal = owned()
+  s.tagTab = "homeland"; s:layoutTags(640)
+  out.homeTotal = select(2, owned())
+  s.tagTab = "race"; s:layoutTags(640)
+  out.heading = true
+  return out
+end''')(ns)
+r = dict(r)
+check("Character tags has a tab for each kind of tag", r["tabs"] == 8, r)
+check("the race tab lists every Horde race with the character's boxed", r["raceTotal"] == 5 and r["raceOwned"] == 1, r)
+check("the temperament tab lists all six and boxes one", r["tempTotal"] == 6 and r["tempOwned"] == 1, r)
+check("the professions tab lists every profession and boxes the character's", r["profTotal"] == 12 and r["profOwned"] >= 1, r)
+check("the homeland tab lists every homeland", r["homeTotal"] >= 20, r)

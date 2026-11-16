@@ -26,17 +26,21 @@ function Log.init()
 end
 
 local function testing() return ns.cdb and ns.cdb.testing == true end
+-- while the simulator is playing a fake user, nothing is logged
+local function muted() return ns.simActor ~= nil and not ns.simActor.user end
 
 function Log.fightStart(sim)
-  if not session then return end
+  if not session or muted() then return end
   fight = {start = ns.now(), wall = ns.wall(), events = {}, flags = {}, sim = sim and true or nil,
-    test = testing() or nil, pace = ns.chattyNow and ns.chattyNow() or nil}
+    test = testing() or nil, pace = ns.chattyNow and ns.chattyNow() or nil,
+    party = ns.simParty and #ns.simParty or nil}
   table.insert(session.fights, fight)
   local cap = testing() and TEST_MAX_FIGHTS or MAX_FIGHTS
   while #session.fights > cap do table.remove(session.fights, 1) end
 end
 
 function Log.fightEnd()
+  if muted() then return end
   if fight then
     fight.dur = ns.now() - fight.start
     -- name the fight after the first enemy it involved
@@ -48,7 +52,7 @@ function Log.fightEnd()
 end
 
 local function add(e)
-  if not on() or not session then return end
+  if not on() or not session or muted() then return end
   local list = fight and fight.events or session.loose
   e.t = ns.now() - (fight and fight.start or looseStart)
   e.wall = ns.wall()
@@ -67,6 +71,7 @@ function Log.event(e) add(e) end
 local recentQuiet = {}
 function Log.quiet(ctx, moment, why)
   if ns.simQuiet then ns.simQuiet(ctx, moment, why) end
+  if muted() then return end
   recentQuiet[#recentQuiet + 1] = {at = ns.now(), moment = moment, ability = ctx and ctx.ability,
     item = ctx and ctx.itemName, why = why}
   while #recentQuiet > 8 do table.remove(recentQuiet, 1) end
@@ -275,7 +280,7 @@ function Log.exportText()
   local out = {}
   local function add(s) out[#out + 1] = s end
   add(("cro/x export · %s · %s"):format(ns.BUILD, date and date("%Y-%m-%d %H:%M") or ""))
-  add(("character: %s %s · temperament %s · homeland %s · upbringing %s · drive %s · chatty %d · filter %s"):format(
+  add(("character: %s %s · temperament %s · homeland %s · origin %s · motivation %s · chatty %d · filter %s"):format(
     pf.race or "?", (pf.class or "?"):lower(), cdb.temperament or "?", (cdb.homeland or "none"):gsub("^home:", ""),
     cdb.upbringing or "?", cdb.drive or "?", cdb.chatty or 2, cdb.filter and "on" or "off"))
   local profs = {}
@@ -390,7 +395,7 @@ function Log.testReport()
   local gv, gb = "?", "?"
   if GetBuildInfo then local a, b = GetBuildInfo() gv, gb = a or "?", b or "?" end
   add(("cro/x TEST DATA · %s · game %s (%s) · %s"):format(ns.BUILD, gv, gb, date and date("%Y-%m-%d %H:%M") or ""))
-  add(("character: %s %s · %s · homeland %s · upbringing %s · drive %s"):format(pf.race or "?", (pf.class or "?"):lower(),
+  add(("character: %s %s · %s · homeland %s · origin %s · motivation %s"):format(pf.race or "?", (pf.class or "?"):lower(),
     cdb.temperament or "?", (cdb.homeland or "none"):gsub("^home:", ""), cdb.upbringing or "?", cdb.drive or "?"))
   local ch, rc = ns.CHATTY[cdb.chatty or 3], ns.CHATTY[cdb.raidChatty or 3]
   add(("pace: on your own %s (%s) · in a group %s (%s) · emotes %s · yell %s · call and response %s · ask %s · answer %s · take turns %s · profession lines %s"):format(
