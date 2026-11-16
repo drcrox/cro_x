@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.60-beta.1 · 2026-11-15
+- yells are earned: stakes, a gap that follows the pace, one shout at a time in a party; text scale applies when you let go of the slider
+
 ## 0.57-alpha2.47 · 2026-11-15
 - fix: window layout ran before the page list existed (error on opening)
 

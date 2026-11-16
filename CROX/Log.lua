@@ -112,6 +112,7 @@ function Log.describe(e, forExport)
   end
   if forExport and e.own and not ns.cdb.includeOwn then text = "(one of your own lines)" end
   local verb = e.channel == "EMOTE" and "emoted" or (e.channel == "YELL" and "yelled" or "said")
+  if e.held then verb = verb .. " (a yell held back: " .. e.held .. ")" end
   local quote = e.channel == "EMOTE" and ("\"" .. who .. " " .. text .. "\"") or ("\"" .. text .. "\"")
   local target = e.target
   if forExport and e.tgtPlayer then target = "an enemy player" end

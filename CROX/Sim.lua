@@ -14,7 +14,7 @@ ns.Sim = Sim
 
 local SCENARIOS = {
   {1, "One pull (30 seconds)", pulls = 1, dur = 30},
-  {2, "Boss fight (3 minutes)", pulls = 1, dur = 180},
+  {2, "Boss fight (3 minutes)", pulls = 1, dur = 180, boss = true},
   {3, "Five pulls in a row", pulls = 5, dur = 30},
 }
 local SPEEDS = {{1, "2x", 2}, {2, "4x", 4}, {3, "6x", 6}, {4, "Instant", 0}}
@@ -140,7 +140,7 @@ end
 
 local function foeTarget(r)
   return {exists = true, name = r.foe, enemy = true, friend = false, self = false, player = false, ctype = "humanoid",
-    hp = r.foeHp, dead = r.foeHp <= 0, casting = r.casting, guid = "sim-" .. r.pull}
+    hp = r.foeHp, dead = r.foeHp <= 0, casting = r.casting, guid = "sim-" .. r.pull, boss = r.scen and r.scen.boss or false}
 end
 local function selfTarget(a)
   return {exists = true, name = a.name, enemy = false, friend = false, self = true, player = true,

@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.60"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.60-beta"
+local BUILD = "0.60-beta.1"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -304,6 +304,9 @@ local function targetFacts()
   local casting = safe(UnitCastingInfo, "target") or safe(UnitChannelInfo, "target")
   if secret(casting) then t.casting = nil else t.casting = casting and true or false end
   t.guid = str(safe(UnitGUID, "target"))
+  local cls = str(safe(UnitClassification, "target"))
+  local lvl = num(safe(UnitLevel, "target"))
+  t.boss = (cls == "worldboss" or cls == "elite" or cls == "rareelite") or lvl == -1
   return t
 end
 
@@ -649,15 +652,44 @@ local function render(c, ctx, channel, extra)
 end
 
 local YELLY = {rally = true, taunt = true, powerup = true, laststand = true}
-local function channelFor(c, moment, opt)
+-- A yell has to be earned. A line that wants to be shouted is only shouted when
+--   * it has been a while since this character last yelled (the gap shrinks as the pace gets louder),
+--   * nobody else in the party has yelled just now (one shout at a time), and
+--   * the moment has stakes: health is low, the enemy is a boss or elite, or the fight has dragged on.
+-- Anything else is said instead. A phrase the player marked "yell" is always yelled, and calls to far allies are
+-- yelled in Group.lua because they have to carry.
+local YELL_GAP_MIN, YELL_GAP_MAX, DRAGGED_ON = 30, 120, 30
+local lastYell, fightT0, fightYells = -1000, 0, 0
+local function yellGap()
+  local c = ns.CHATTY and (ns.CHATTY[ns.chattyNow()] or ns.CHATTY[3]) or {rate = 3}
+  return math.max(YELL_GAP_MIN, math.min(YELL_GAP_MAX, 180 / c.rate))
+end
+local function yellEarned(moment, ctx, t)
+  if t - lastYell < yellGap() then return false, "yell gap" end
+  if ns.G and ns.G.yellBlock and ns.G.yellBlock(t) then return false, "party yell" end
+  if moment == "laststand" then return true end
+  ctx = ctx or {}
+  local hp = ctx.hp
+  if hp and hp < 50 then return true end
+  if ctx.tgt and ctx.tgt.boss then return true end
+  if ns.inCombat and fightT0 > 0 and t - fightT0 >= DRAGGED_ON then return true end
+  return false, "no stakes"
+end
+local function channelFor(c, moment, opt, ctx)
   if c.line.e then return "EMOTE" end
   if c.custom and c.custom.as == "say" then return "SAY" end
   local want = "SAY"
-  if c.custom and c.custom.as == "yell" then want = "YELL"
-  elseif opt and opt.yell then want = "YELL"
+  local forced = false
+  if c.custom and c.custom.as == "yell" then want, forced = "YELL", true
+  elseif opt and opt.yell then want, forced = "YELL", true
   elseif YELLY[moment] or capsShare(c.line.t) >= 0.6 then want = "YELL" end
   if want == "YELL" and not cdb.yell then want = "SAY" end
-  return want
+  local held
+  if want == "YELL" and not forced then
+    local ok, why = yellEarned(moment, ctx, now())
+    if not ok then want, held = "SAY", why end
+  end
+  return want, held
 end
 ns.channelFor = channelFor
 
@@ -733,7 +765,7 @@ end
 
 -- say a chosen line; kind: "said" | "call" | "reply"; returns true if it went out
 local function deliver(c, ctx, moment, extra, opt)
-  local channel = channelFor(c, moment, opt)
+  local channel, held = channelFor(c, moment, opt, ctx)
   if opt and opt.channel then channel = c.line.e and "EMOTE" or opt.channel end
   local text = render(c, ctx, channel, extra)
   if not text or text == "" then return false end
@@ -743,6 +775,7 @@ local function deliver(c, ctx, moment, extra, opt)
   refillBudget(t)
   budget = math.max(0, budget - 1)
   lastSpoke = t
+  if channel == "YELL" then lastYell, fightYells = t, fightYells + 1 end
   spokeTimes[#spokeTimes + 1] = t
   while #spokeTimes > 30 do table.remove(spokeTimes, 1) end
   cdb.last[c.id] = wall()
@@ -751,9 +784,9 @@ local function deliver(c, ctx, moment, extra, opt)
     ns.Log.said({moment = moment, ability = ctx.ability, item = ctx.itemName, text = text, channel = channel,
       pool = c.pool, own = c.custom and true or nil, target = ctx.tgt and ctx.tgt.name, tgtPlayer = ctx.tgt and ctx.tgt.player,
       onAlly = ctx.onAlly, onSelf = ctx.onSelf, ally = extra and extra.ally, allyClass = extra and extra.allyClass,
-      kind = (opt and opt.kind) or "said"})
+      kind = (opt and opt.kind) or "said", held = held})
   end
-  if ns.G and ns.G.noteSpoke and not (opt and opt.noBroadcast) then ns.G.noteSpoke(opt and opt.kind) end
+  if ns.G and ns.G.noteSpoke and not (opt and opt.noBroadcast) then ns.G.noteSpoke(opt and opt.kind, channel == "YELL") end
   return true
 end
 ns.deliver = deliver
@@ -1298,6 +1331,7 @@ ev:SetScript("OnEvent", function(_, event, a1, ...)
     ns.inCombat = true
     refillBudget(now())
     budget = math.min(budget, 1.0)    -- a short pull starts with at most one line to spend
+    fightT0, fightYells = now(), 0
     if ns.G and ns.G.fightStart then ns.G.fightStart() end
     if ns.Log then ns.Log.fightStart() end
   elseif event == "PLAYER_REGEN_ENABLED" then
@@ -1376,6 +1410,7 @@ function ns.simFight(on)
     refillBudget(now())
     budget = math.min(budget, 1.0)
     fightOpened = false
+    fightT0, fightYells = now(), 0
     if ns.G and ns.G.fightStart then ns.G.fightStart() end
     if ns.Log then ns.Log.fightStart(true) end
   else
@@ -1409,13 +1444,15 @@ function ns.simNewCharDB(over)
 end
 local function paceGet()
   return {budget = budget, budgetT = budgetT, lastSpoke = lastSpoke, hurtAt = hurtAt, killPending = killPending,
-    fightOpened = fightOpened, spoke = spokeTimes, debuffCall = lastDebuffCallout}
+    fightOpened = fightOpened, spoke = spokeTimes, debuffCall = lastDebuffCallout,
+    lastYell = lastYell, fightT0 = fightT0, fightYells = fightYells}
 end
 local function paceSet(st)
   budget, budgetT, lastSpoke, hurtAt, killPending, fightOpened, spokeTimes, lastDebuffCallout =
     st.budget, st.budgetT, st.lastSpoke, st.hurtAt, st.killPending, st.fightOpened, st.spoke, st.debuffCall or -100
+  lastYell, fightT0, fightYells = st.lastYell or -1000, st.fightT0 or 0, st.fightYells or 0
 end
-function ns.simFreshState() return {budget = 1.0, budgetT = 0, lastSpoke = -1000, hurtAt = -100, spoke = {}, debuffCall = -100} end
+function ns.simFreshState() return {budget = 1.0, budgetT = 0, lastSpoke = -1000, hurtAt = -100, spoke = {}, debuffCall = -100, lastYell = -1000, fightT0 = 0, fightYells = 0} end
 -- the simulator hands the current character a new debuff (dtype: Poison, Disease, Curse or Magic)
 local SIM_DEBUFF_NAMES = {Poison = "Serpent Sting", Disease = "Plague Cloud", Curse = "Curse of Agony", Magic = "Frost Nova"}
 function ns.simDebuff(dtype)

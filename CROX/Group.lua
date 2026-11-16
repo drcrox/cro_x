@@ -13,6 +13,8 @@ local members = {}           -- [name] = {class, ver, flags, flagsT, seen}
 G.members = members
 local partyTimes = {}        -- times of party lines (last minute)
 local lastPartySpoke, lastPartySpeaker = -1000, nil
+local lastPartyYell = -1000                      -- when anyone in the party last yelled (a line, not a call across distance)
+local PARTY_YELL_GAP = 20
 local pendingReply           -- {kind, caller, t, dtype}
 local pendingThanks          -- {helper, t}
 local lastCall = {}          -- [kind] = time
@@ -225,10 +227,20 @@ local function notePartyLine(who)
 end
 
 -- Core calls this after any line goes out. kind: "said" | "call" | "reply"
-function G.noteSpoke(kind)
+function G.noteSpoke(kind, yelled)
   if kind == "call" then return end          -- a call counts only once answered (the reply counts the pair)
   notePartyLine(me())
-  send("SP", kind == "reply" and 1 or 0, ns.chattyNow())
+  if yelled then
+    lastPartyYell = now()
+    send("SP", kind == "reply" and 1 or 0, ns.chattyNow(), "Y")
+  else
+    send("SP", kind == "reply" and 1 or 0, ns.chattyNow())
+  end
+end
+-- true while someone in the party has just yelled: only one shout at a time
+function G.yellBlock(t)
+  if not grouped() or #others() == 0 then return false end
+  return t - lastPartyYell < PARTY_YELL_GAP
 end
 
 ------------------------------------------------------------------------
@@ -424,6 +436,7 @@ local function onAddon(prefix, msg, ch, sender)
     m.flags, m.flagsT = parts[4] or "", t
   elseif kind == "SP" then
     m.level = tonumber(parts[5]) or m.level
+    if parts[6] == "Y" then lastPartyYell = t end
     if not ns.simParty then notePartyLine(from) end      -- (the simulator's party shares one budget, so the speaker's own line already counted)
   elseif kind == "CALL" then
     local xid = (parts[7] and parts[7] ~= "") and parts[7] or (from .. "-" .. math.floor(t))
@@ -487,7 +500,7 @@ function G.simSet(g)
   G.members, G.exchanges = members, exchanges
 end
 function G.simPending() return pendingReply end
-function G.simResetParty() pBudget, pBudgetT, lastPartySpoke, lastPartySpeaker = 1.0, 0, -1000, nil for i = #partyTimes, 1, -1 do partyTimes[i] = nil end end
+function G.simResetParty() pBudget, pBudgetT, lastPartySpoke, lastPartySpeaker, lastPartyYell = 1.0, 0, -1000, nil, -1000 for i = #partyTimes, 1, -1 do partyTimes[i] = nil end end
 -- what a character of this class can help with, as the status flags the real addon sends
 local SIM_FLAGS = {WARRIOR = "T", PALADIN = "PDMH", PRIEST = "DMH", SHAMAN = "PDHT", DRUID = "PCHT", MAGE = "C", HUNTER = "", ROGUE = "", WARLOCK = ""}
 function G.simFlags(class, spec)

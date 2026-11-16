@@ -517,6 +517,57 @@ check("a pretend fight is captured as test data", r["fights"] >= 4, r["fights"])
 check("the test report has a summary and simulated fights", "SUMMARY" in r["rep"] and "(SIMULATED)" in r["rep"] and "pace" in r["rep"], r["rep"][:300])
 check("test data can be cleared", r["cleared"])
 
+# --- yells have to be earned (0.60-beta.1)
+r = lua.eval('''function(ns, H)
+  local out = {}
+  local W = ns.W
+  ns.cdb.yell = true
+  local function line(t) return {line = {t = t}, id = "test:yell:" .. t, pool = "arch:powerup"} end
+  local function go(hp, boss, text)
+    local ctx = ns.makeCtx(nil, nil)
+    ctx.hp = hp
+    ctx.tgt = {exists = true, enemy = true, boss = boss}
+    ns.deliver(line(text), ctx, "powerup")
+    return H.sent[#H.sent].ch
+  end
+  H.tick(500)                                   -- long since any yell
+  out.calm = go(100, false, "Rage is fuel one")  -- calm trash fight, full health: said
+  out.low = go(30, false, "Rage is fuel two")    -- low health: yelled
+  out.gap = go(30, false, "Rage is fuel three")  -- straight after a yell: said
+  H.tick(500)
+  out.boss = go(100, true, "Rage is fuel four")  -- a boss: yelled
+  H.tick(500)
+  -- a phrase the player marked "yell" is always yelled, and the gap still counts
+  local ctx = ns.makeCtx(nil, nil) ctx.hp = 100 ctx.tgt = {exists = true, enemy = true, boss = false}
+  ns.deliver({line = {t = "Mine"}, id = "own:1", pool = "own", custom = {as = "yell"}}, ctx, "powerup")
+  out.own = H.sent[#H.sent].ch
+  H.tick(500)
+  -- someone else in the party yelled: hold ours
+  H.group = true H.party = {party1 = "Krakka"}
+  ns.G._test.onAddon("CROX", "V2|HI|0|0.50|SHAMAN", "PARTY", "Krakka")
+  ns.G._test.onAddon("CROX", "V2|SP|0|0|3|Y", "PARTY", "Krakka")
+  out.party = go(30, true, "Rage is fuel five")
+  H.tick(40)
+  out.partyLater = go(30, true, "Rage is fuel six")
+  H.group = false
+  -- a slow slider applies its change only when the mouse is let go
+  local applied, labels = 0, 0
+  local parent = CreateFrame("Frame", nil, UIParent)
+  local sl = W.slider(parent, "Scale", 0.8, 1.4, 0.05, function() return 1 end, function(v) applied = v end, nil, true)
+  sl:SetValue(1.25)
+  out.heldWhileDragging = applied == 0
+  for _, fn in ipairs(sl._scripts.OnMouseUp or {}) do fn(sl) end
+  out.appliedOnRelease = math.abs(applied - 1.25) < 0.001
+  return out
+end''')(ns, H)
+check("yell: a calm fight at full health is said", r["calm"] == "SAY", r["calm"])
+check("yell: low health earns a yell", r["low"] == "YELL", r["low"])
+check("yell: straight after a yell the next is said", r["gap"] == "SAY", r["gap"])
+check("yell: a boss earns a yell", r["boss"] == "YELL", r["boss"])
+check("yell: a phrase marked yell is always yelled", r["own"] == "YELL", r["own"])
+check("yell: held while a party member's yell is fresh, free after", r["party"] == "SAY" and r["partyLater"] == "YELL", (r["party"], r["partyLater"]))
+check("slider that rescales the window waits for mouse release", r["heldWhileDragging"] and r["appliedOnRelease"])
+
 # --- commands section and the build text in the picture's corner
 r = lua.eval('''function(ns)
   ns.openSection("commands")

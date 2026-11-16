@@ -148,7 +148,9 @@ function W.dropdown(parent, width, items, get, set)
   return dd
 end
 
-function W.slider(parent, label, minV, maxV, step, get, set, fmt)
+-- deferred = true: the label follows the handle while it is dragged, but set() runs only when the mouse is let go.
+-- (A slider that rescales the window it sits in has to wait, or it moves out from under the mouse as it is dragged.)
+function W.slider(parent, label, minV, maxV, step, get, set, fmt, deferred)
   local s = make("Slider", parent, {"OptionsSliderTemplate", "HorizontalSliderTemplate"}, nextName("Slider"))
   s:SetOrientation("HORIZONTAL")
   s:SetMinMaxValues(minV, maxV)
@@ -164,11 +166,18 @@ function W.slider(parent, label, minV, maxV, step, get, set, fmt)
   local function show(v) if txt then txt:SetText(label .. ": " .. (fmt and fmt(v) or tostring(v))) end end
   s:SetValue(get())
   show(get())
+  local pending
   s:SetScript("OnValueChanged", function(_, v)
     v = math.floor(v / step + 0.5) * step
     show(v)
-    set(v)
+    if deferred then pending = v else set(v) end
   end)
+  if deferred then
+    local function commit() if pending ~= nil then local v = pending pending = nil set(v) end end
+    s:HookScript("OnMouseUp", commit)
+    s:HookScript("OnHide", commit)
+    s.commit = commit
+  end
   return s
 end
 

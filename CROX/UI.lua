@@ -326,7 +326,7 @@ local function buildHome(parent)
   s.trollDD, s.trollL, s.trollH = trollDD, trollL, trollH
   local SWITCHES = {
     {"emotes", "Emotes", "Emotes stay a rare accent either way."},
-    {"yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies."},
+    {"yell", "Allow /yell", "With this off, everything goes to /say, even calls to faraway allies. With it on, yells are still saved for big moments: low health, a boss or elite, or a long fight, with a rest between yells that is shorter at louder paces, and only one yell at a time in a party."},
     {"cr", "Call and response", "Your character calls for help and answers other cro/x users in your group."},
     {"turns", "Take turns with the party", "cro/x users in a party take turns instead of talking over each other. Turning it off only affects you."},
     {"filter", "Profanity filter", "Real-world swear words are swapped for clean versions. Your own lines are never changed."},
@@ -643,7 +643,11 @@ local function buildOptions(parent)
   y = y - 32
   head("Window")
   local slider = W.slider(s, "Text scale", 0.8, 1.4, 0.05, function() return cdb().textScale or 1 end,
-    function(v) cdb().textScale = v if ns.relayout then ns.relayout() end end, function(v) return ("%d%%"):format(v * 100 + 0.5) end)
+    function(v)
+      cdb().textScale = v
+      if ns.relayout then ns.relayout() end
+      if C_Timer and C_Timer.After then C_Timer.After(0.1, function() if ns.relayout then ns.relayout() end end) end   -- once more when the frames have settled
+    end, function(v) return ("%d%%"):format(v * 100 + 0.5) end, true)
   slider:SetPoint("TOPLEFT", 18, y - 12)
   y = y - 44
   check("minimap", "Minimap button", "/x always opens this window.", function(on) if ns.updateMinimap then ns.updateMinimap() end end)
@@ -1683,8 +1687,9 @@ local function relayout()
     scrollFrame:SetPoint("TOPLEFT", listFrame, "TOPRIGHT", 8, -4)
   end
   scrollFrame:SetPoint("BOTTOMRIGHT", hordePage, "BOTTOMRIGHT", -26, 4)
-  local cw = scrollFrame:GetWidth()
-  if not cw or cw < 50 then cw = narrow and (bw - 40) or (bw - LIST_W - 40) end
+  -- worked out from the window's own size, not read back from the scroll frame: right after a scale change the frame
+  -- still reports its old width for a moment, and the text would wrap to it
+  local cw = narrow and (bw - 32) or (bw - LIST_W - 34)
   scrollChild:SetWidth(cw)
   local s = sections[current]
   if s then
