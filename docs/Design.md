@@ -253,3 +253,8 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 - Levels now: Silent 0-1, Hushed 1-3, Quiet 2-4, Steady 3-5, Vocal 4-6, Loud 5-7, Roaring 6-7 lines a minute. Names chosen from the "volume" set. **Talkative** (solo) offers the first five; **How social** (raid and group pace) offers all seven, so Loud and Roaring exist only on the group setting.
 - Defaults: Talkative Quiet (2-4), How social Hushed (1-3). Rates are the middle of each spread (0.5, 2, 3, 4, 5, 6, 6.5) and chance multipliers were recalibrated in the simulation (0.05, 0.3, 0.6, 0.85, 1.2, 1.6, 1.9). Saved settings from the five-level scale move across by rate (`chattyScale` 3).
 - The party shares one budget refilled at the loudest member's rate, so a group with someone on Roaring tops out near 6.5 a minute.
+
+### Level names and the group setting (0.57-alpha2.39)
+- Names: Silent 0-1, Hushed 1-3, **Steady 2-4 (default)**, Vocal 3-5, Loud 4-6, Booming 5-7, Roaring 6-7. (The 2-4 level is no longer called Quiet, so the default doesn't read as quiet.)
+- The two rows on the Setup page are **On your own** (levels 1-5) and **In a group** (all seven). The group setting applies in any party or raid, not just raids; it is still stored as `raidChatty`. Default is Steady for both. Booming and Roaring exist only on the group setting.
+- A raid-wide cap (the proposal in the raid doc) is still future work, so for now a raid uses the same shared party-style budget at the loudest member's rate.

@@ -292,13 +292,13 @@ local function buildHome(parent)
     if tip then W.tooltip(label, text, tip) end
     return dd, label, h
   end
-  local chattyDD, _, chattyHint = speakRow(1, "Talkative", "", function() return ns.chattyItems(false) end, function() return cdb().chatty end,
+  local chattyDD, _, chattyHint = speakRow(1, "On your own", "", function() return ns.chattyItems(false) end, function() return cdb().chatty end,
     function(v) cdb().chatty = v s:refreshChoices() end,
-    "How many lines a minute to expect in a fight. These are rough: the real rate depends on how fast you press. In a party the shared party pace still applies.")
+    "How many lines a minute to expect in a fight when you are on your own. These are rough: the real rate depends on how fast you press.")
   s.chattyDD, s.chattyHint = chattyDD, chattyHint
-  local raidDD, _, raidHint = speakRow(2, "How social", "", function() return ns.chattyItems(true) end, function() return cdb().raidChatty or 2 end,
+  local raidDD, _, raidHint = speakRow(2, "In a group", "", function() return ns.chattyItems(true) end, function() return cdb().raidChatty or 3 end,
     function(v) cdb().raidChatty = v s:refreshChoices() end,
-    "How talkative you are in a raid, with the same five levels. Raids are noisy already, so this starts at Quiet.")
+    "How talkative you are whenever you are in a party or a raid. The group shares one pace, set by its loudest member. Booming and Roaring are only here.")
   s.raidDD, s.raidHint = raidDD, raidHint
   local askL, askH
   s.askDD, askL, askH = speakRow(3, "Ask for help", "", CR_LEVELS, function() return cdb().crAsk or 4 end,
@@ -414,7 +414,7 @@ local function buildHome(parent)
     self.askHint:SetText(CR_EST[c.crAsk or 4] or "")
     self.giveHint:SetText(CR_EST[c.crGive or 4] or "")
     self.chattyHint:SetText(est(c.chatty or 3))
-    self.raidHint:SetText(est(c.raidChatty or 2))
+    self.raidHint:SetText(est(c.raidChatty or 3))
     self:layoutSpeak()
     local pf = ns.profile
     self.who:SetText(("%s · %s %s"):format(pf.name or "", pf.race or "", cap((pf.class or ""):lower())))

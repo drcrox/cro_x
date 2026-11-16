@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.39 · 2026-11-15
+- Level names, On your own / In a group
+
 ## 0.57-alpha2.38 · 2026-11-15
 - Estimates beside Ask for help and Answer a call
 

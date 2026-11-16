@@ -392,8 +392,8 @@ function Log.testReport()
   add(("cro/x TEST DATA · %s · game %s (%s) · %s"):format(ns.BUILD, gv, gb, date and date("%Y-%m-%d %H:%M") or ""))
   add(("character: %s %s · %s · homeland %s · upbringing %s · drive %s"):format(pf.race or "?", (pf.class or "?"):lower(),
     cdb.temperament or "?", (cdb.homeland or "none"):gsub("^home:", ""), cdb.upbringing or "?", cdb.drive or "?"))
-  local ch, rc = ns.CHATTY[cdb.chatty or 3], ns.CHATTY[cdb.raidChatty or 2]
-  add(("pace: Talkative %s (%s) · raid %s (%s) · emotes %s · yell %s · call and response %s · ask %s · answer %s · take turns %s · profession lines %s"):format(
+  local ch, rc = ns.CHATTY[cdb.chatty or 3], ns.CHATTY[cdb.raidChatty or 3]
+  add(("pace: on your own %s (%s) · in a group %s (%s) · emotes %s · yell %s · call and response %s · ask %s · answer %s · take turns %s · profession lines %s"):format(
     ch and ch.name or "?", ch and ch.est or "?", rc and rc.name or "?", rc and rc.est or "?", tostring(cdb.emotes), tostring(cdb.yell),
     tostring(cdb.cr), tostring(cdb.crAsk), tostring(cdb.crGive), tostring(cdb.turns), tostring(cdb.profLines ~= false)))
   add(("errors this session: %d%s"):format(ns.Bug and ns.Bug.errorCount() or 0,

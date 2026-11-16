@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.57"
 -- Display label. Public releases read "0.57-alpha2"; private working builds add a counter: "0.57-alpha2.1", ".2"...
-local BUILD = "0.57-alpha2.38"
+local BUILD = "0.57-alpha2.39"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -52,7 +52,7 @@ ns.TEMPERAMENTS, ns.UPBRINGINGS, ns.DRIVES = TEMPERAMENTS, UPBRINGINGS, DRIVES
 
 local CHAR_DEFAULTS = {
   profLines = true, testing = false,
-  on = true, chatty = 3, raidChatty = 2, chattyScale = 3, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
+  on = true, chatty = 3, raidChatty = 3, chattyScale = 3, crAsk = 4, crGive = 4, sound = true, emotes = true, yell = true, cr = true, turns = true,
   filter = true, troll = "accent", logging = true, includeOwn = false,
   temperament = "gruff", homeland = nil, upbringing = "soldier", drive = "honor", pronouns = "they",
   setupDone = false, off = {}, said = {}, last = {}, custom = {}, recipes = {}, recipeNames = {},
@@ -667,10 +667,10 @@ ns.channelFor = channelFor
 local CHATTY = {
   [1] = {name = "Silent", est = "0-1 a minute", rate = 0.5, mult = 0.05},
   [2] = {name = "Hushed", est = "1-3 a minute", rate = 2.0, mult = 0.3},
-  [3] = {name = "Quiet", est = "2-4 a minute", rate = 3.0, mult = 0.6},
-  [4] = {name = "Steady", est = "3-5 a minute", rate = 4.0, mult = 0.85},
-  [5] = {name = "Vocal", est = "4-6 a minute", rate = 5.0, mult = 1.2},
-  [6] = {name = "Loud", est = "5-7 a minute", rate = 6.0, mult = 1.6},      -- group setting only
+  [3] = {name = "Steady", est = "2-4 a minute", rate = 3.0, mult = 0.6},
+  [4] = {name = "Vocal", est = "3-5 a minute", rate = 4.0, mult = 0.85},
+  [5] = {name = "Loud", est = "4-6 a minute", rate = 5.0, mult = 1.2},
+  [6] = {name = "Booming", est = "5-7 a minute", rate = 6.0, mult = 1.6},      -- group setting only
   [7] = {name = "Roaring", est = "6-7 a minute", rate = 6.5, mult = 1.9},   -- group setting only
 }
 local SOLO_LEVELS = 5       -- the solo setting offers the first five; the last two are for groups
@@ -691,10 +691,10 @@ function ns.chattyItems(group)
   end
   return t
 end
--- the pace setting in force: raids have their own (quieter by default), everything else uses How chatty
+-- the pace setting in force: any party or raid uses the group setting (stored as raidChatty), alone uses the solo one
 function ns.chattyNow()
   local c = ns.cdb or cdb
-  if bool(safe(IsInRaid)) then return math.min(7, c.raidChatty or 2) end
+  if bool(safe(IsInGroup)) or bool(safe(IsInRaid)) then return math.min(7, c.raidChatty or 3) end
   return math.min(SOLO_LEVELS, c.chatty or 3)
 end
 

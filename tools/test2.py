@@ -221,12 +221,15 @@ check("/x art does nothing now", G.CROX2ArtFrame is None)
 r = lua.eval('''function(ns)
   local out = {}
   ns.cdb.chatty = 3; ns.cdb.raidChatty = 1
-  local save = IsInRaid
+  local save, saveG = IsInRaid, IsInGroup
   IsInRaid = function() return false end
+  IsInGroup = function() return false end
   out.party = ns.chattyNow()
+  IsInGroup = function() return true end            -- a party, not a raid
+  out.inParty = ns.chattyNow()
   IsInRaid = function() return true end
   out.raid = ns.chattyNow()
-  IsInRaid = save
+  IsInRaid, IsInGroup = save, saveG
   ns.showSplash()
   local sp = ns._sections.home
   out.hasSwitches = sp.switches.emotes ~= nil and sp.switches.yell ~= nil and sp.switches.cr ~= nil and sp.switches.turns ~= nil
@@ -243,7 +246,7 @@ r = lua.eval('''function(ns)
   ns.cdb.chatty = 2
   sp:Hide()
   return out end''')(ns)
-check("raids use their own pace, everything else uses How chatty", r["party"] == 3 and r["raid"] == 1, (r["party"], r["raid"]))
+check("any group (party or raid) uses the group pace, alone uses the solo one", r["party"] == 3 and r["inParty"] == 1 and r["raid"] == 1, (r["party"], r["inParty"], r["raid"]))
 check("splash has the speaking switches and they change the setting", r["hasSwitches"] and r["yellAfter"] == False, r["yellAfter"])
 check("window sounds can be turned off", r["soundOn"] == 1 and r["soundOff"] == 1, (r["soundOn"], r["soundOff"]))
 
@@ -307,10 +310,10 @@ r = lua.eval('''function(ns)
   out.always, out.rarely = always, hits / 2000
   ns.cdb.crAsk = 4
   return out end''')(ns)
-check("seven levels: solo offers five, groups all seven", r["levels"] == 7 and r["soloCount"] == 5 and r["groupCount"] == 7 and r["item1"] == "Silent" and r["item3"] == "Quiet" and r["item5"] == "Vocal" and r["lastGroup"] == "Roaring", (r["item1"], r["item3"], r["item5"], r["lastGroup"]))
+check("seven levels: solo offers five, groups all seven", r["levels"] == 7 and r["soloCount"] == 5 and r["groupCount"] == 7 and r["item1"] == "Silent" and r["item3"] == "Steady" and r["item5"] == "Loud" and r["lastGroup"] == "Roaring", (r["item1"], r["item3"], r["item5"], r["lastGroup"]))
 check("pace rates rise with each level", r["perMin"] == "0.5,2,3,4,5,6,6.5", r["perMin"])
 check("older paces move onto the seven-level scale by rate", r["migrated"] == "4,3,3" and r["migratedLively"] == 5, (r["migrated"], r["migratedLively"]))
-check("new characters start at Quiet (2-4), raids Hushed (1-3), call dials Always", r["fresh"] == "3,2,4,4", r["fresh"])
+check("new characters start at Steady (2-4) alone and in a group, call dials Always", r["fresh"] == "3,3,4,4", r["fresh"])
 check("call dials: Always never skips, Rarely about a quarter", r["always"] and 0.18 < r["rarely"] < 0.32, r["rarely"])
 
 # --- multi-speaker groundwork
