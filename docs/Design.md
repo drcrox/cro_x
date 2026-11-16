@@ -213,3 +213,5 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 - Whether alignment from the first alpha becomes a fifth setup question or is dropped.
 - Emote share of the pace.
 - What else carries over from the first alpha (enemy kinds, the DRAFT class pools). Troll voice: carried over (Options, 2026-11-15).
+
+- **Splash header and title card (2026-11-15):** the splash carries the same header as the main window ("Combat Roleplay Options - cro/x") in a dark strip across the top, and a title card ("Combat Roleplay Options" in the large decorative font between gold rules) above the character dropdowns, so people know which addon it is.
