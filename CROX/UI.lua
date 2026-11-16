@@ -1410,7 +1410,7 @@ function ns.showSplash(onDone)
   if not splash then
     local savedSize = ns.db and ns.db.splashSize
     -- the same window frame as the main window: its title bar, crest and close button
-    splash = W.panel("CROX2SplashFrame", "Combat Roleplay Options - cro/x", math.max(560, savedSize and savedSize[1] or 600), math.max(660, savedSize and savedSize[2] or 700))
+    splash = W.panel("CROX2SplashFrame", "Combat Roleplay Options - cro/x", math.max(620, savedSize and savedSize[1] or 700), math.max(720, savedSize and savedSize[2] or 760))
     splash:ClearAllPoints()
     splash:SetPoint("CENTER", 0, 40)
     local crest = splash:CreateTexture(nil, "OVERLAY")
@@ -1419,8 +1419,8 @@ function ns.showSplash(onDone)
     crest:SetSize(20, 20)
     crest:SetPoint("TOPLEFT", 6, -2)
     splash:SetResizable(true)
-    if splash.SetResizeBounds then splash:SetResizeBounds(560, 660, 1100, 960)
-    elseif splash.SetMinResize then splash:SetMinResize(560, 660) splash:SetMaxResize(1100, 960) end
+    if splash.SetResizeBounds then splash:SetResizeBounds(620, 720, 1100, 1000)
+    elseif splash.SetMinResize then splash:SetMinResize(620, 720) splash:SetMaxResize(1100, 1000) end
     local inner = CreateFrame("Frame", nil, splash)
     inner:SetPoint("TOPLEFT", 8, -28)
     inner:SetPoint("BOTTOMRIGHT", -8, 8)
@@ -1454,7 +1454,7 @@ function ns.showSplash(onDone)
     plate:SetPoint("TOP", splash.who, "BOTTOM", 0, -12)
     plate:SetPoint("LEFT", splash, "LEFT", 28, 0)
     plate:SetPoint("RIGHT", splash, "RIGHT", -28, 0)
-    plate:SetHeight(40 + #CHOICES * 34)
+    plate:SetHeight(40 + #CHOICES * 34 + 44)
     local pt = plate:CreateTexture(nil, "BACKGROUND")
     pt:SetAllPoints()
     pt:SetColorTexture(0, 0, 0, 0.62)
@@ -1462,20 +1462,47 @@ function ns.showSplash(onDone)
     head:SetPoint("TOP", plate, "TOP", 0, -10)
     -- the rows sit in one group that stays centered in the plate, however wide the window is
     local grp = CreateFrame("Frame", nil, plate)
-    grp:SetSize(440, #CHOICES * 34)
+    grp:SetSize(560, #CHOICES * 34)
     grp:SetPoint("TOP", plate, "TOP", 0, -34)
-    splash.dds = {}
+    splash.grp = grp
+    splash.dds, splash.hints = {}, {}
     for i, ch in ipairs(CHOICES) do
       local kind = ch[1]
       local y = -(i - 1) * 34
       local label = W.text(grp, ch[2], "GameFontNormal")
       label:SetPoint("TOPLEFT", 0, y - 6)
       local dd = W.dropdown(grp, 170, function() return choiceItems(kind) end, function() return cdb()[kind] end,
-        function(v) cdb()[kind] = v splash:refreshChoices() end)
+        function(v) cdb()[kind] = v splash:refreshChoices(kind) end)
       dd:SetPoint("TOPLEFT", 100, y + 2)
-      local hint = W.text(grp, SPLASH_HINTS[kind] or "", "GameFontDisableSmall")
-      hint:SetPoint("LEFT", dd, "RIGHT", -6, 2)
+      -- a line of flavor for whatever is picked, to the right of the dropdown
+      local hint = W.text(grp, "", "GameFontHighlightSmall")
+      hint:SetPoint("LEFT", dd, "RIGHT", -2, 2)
+      hint:SetPoint("RIGHT", grp, "RIGHT", 0, 0)
+      hint:SetHeight(30)
+      hint:SetWordWrap(true)
+      hint:SetJustifyV("MIDDLE")
       splash.dds[kind] = dd
+      splash.hints[kind] = hint
+    end
+    -- an example line, directly below the dropdowns
+    local ex = W.text(plate, "", "GameFontHighlight")
+    ex:SetPoint("TOPLEFT", grp, "BOTTOMLEFT", 0, -8)
+    ex:SetPoint("RIGHT", grp, "RIGHT", -84, 0)
+    ex:SetHeight(32)
+    ex:SetWordWrap(true)
+    ex:SetJustifyV("TOP")
+    splash.example = ex
+    local another = W.button(plate, "Another", 76, function() splash:rollExample() end)
+    another:SetPoint("TOPRIGHT", grp, "BOTTOMRIGHT", 0, -6)
+    W.tooltip(another, "Another example", "Another line in your character's voice. Only you see this.")
+    function splash:rollExample(kind)
+      local pick = kind
+      if not pick or pick == "pronouns" then
+        local kinds = {"temperament", "homeland", "upbringing", "drive"}
+        pick = kinds[math.random(#kinds)]
+      end
+      local line = ns.sample(pick)
+      self.example:SetText(line and ("|cffffd100Example:|r \"" .. line .. "\"") or "")
     end
     -- how they speak: the pace, the group habits and the content switches, in a second plate
     local plate2 = CreateFrame("Frame", nil, splash)
@@ -1552,6 +1579,12 @@ function ns.showSplash(onDone)
     local show = W.check(splash, "Show at login", function(_, on) cdb().splash = on and true or false end)
     show:SetPoint("BOTTOMRIGHT", -110, 18)
     splash.show = show
+    local function fitGroup()
+      local w = splash:GetWidth() or 700
+      grp:SetWidth(math.max(460, math.min(640, w - 80)))
+    end
+    splash:HookScript("OnSizeChanged", fitGroup)
+    fitGroup()
     -- drag the corner to resize; the picture stays whole and the size is remembered
     local grip = CreateFrame("Button", nil, splash)
     grip:SetSize(16, 16)
@@ -1565,13 +1598,18 @@ function ns.showSplash(onDone)
       splash:StopMovingOrSizing()
       if ns.db then ns.db.splashSize = {math.floor(splash:GetWidth() + 0.5), math.floor(splash:GetHeight() + 0.5)} end
     end)
-    function splash:refreshChoices()
+    function splash:refreshChoices(changed)
       local c = cdb()
       if not c.homeland then
         local list = ns.homelands()
         if list[1] then c.homeland = list[1][1] end
       end
       for _, dd in pairs(self.dds) do dd.refresh() end
+      for kind, hint in pairs(self.hints) do
+        local d = CROX2_DESCRIBE and CROX2_DESCRIBE[kind]
+        hint:SetText((d and c[kind] and d[c[kind]]) or SPLASH_HINTS[kind] or "")
+      end
+      if changed or not self.example:GetText() or self.example:GetText() == "" then self:rollExample(changed) end
       self.chattyDD.refresh() self.raidDD.refresh() self.trollDD.refresh()
       self:layoutSpeak()
       local home

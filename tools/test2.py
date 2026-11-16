@@ -260,6 +260,32 @@ check("raids use their own pace, everything else uses How chatty", r["party"] ==
 check("splash has the speaking switches and they change the setting", r["hasSwitches"] and r["yellAfter"] == False, r["yellAfter"])
 check("window sounds can be turned off", r["soundOn"] == 1 and r["soundOff"] == 1, (r["soundOn"], r["soundOff"]))
 
+
+# --- descriptors beside the splash dropdowns and an example line below them
+r = lua.eval('''function(ns)
+  local out = {missing = {}}
+  local D = CROX2_DESCRIBE
+  for _, v in ipairs(ns.TEMPERAMENTS) do if not D.temperament[v] then out.missing[#out.missing + 1] = "t:" .. v end end
+  for _, v in ipairs(ns.UPBRINGINGS) do if not D.upbringing[v] then out.missing[#out.missing + 1] = "u:" .. v end end
+  for _, v in ipairs(ns.DRIVES) do if not D.drive[v] then out.missing[#out.missing + 1] = "d:" .. v end end
+  for race, list in pairs(CROX2_HOMELANDS) do
+    for _, h in ipairs(list) do if not D.homeland[h[1]] then out.missing[#out.missing + 1] = "h:" .. h[1] end end
+  end
+  out.missing = table.concat(out.missing, ",")
+  ns.cdb.temperament = "cocky"
+  ns.showSplash()
+  local sp = CROX2SplashFrame
+  sp:refreshChoices("temperament")
+  out.hint = sp.hints.temperament._text
+  out.example = sp.example._text
+  sp:refreshChoices("drive")
+  out.exampleDrive = sp.example._text
+  sp:Hide()
+  return out end''')(ns)
+check("every temperament, upbringing, drive and homeland has a descriptor", r["missing"] == "", r["missing"])
+check("splash shows the descriptor for the chosen temperament", r["hint"] == "Sure you're the best in the fight, and happy to say so.", r["hint"])
+check("splash shows an example line below the dropdowns", "Example:" in r["example"] and '"' in r["example"] and "Example:" in r["exampleDrive"], (r["example"], r["exampleDrive"]))
+
 # --- multi-speaker groundwork
 r = lua.eval('''function(ns)
   local G = ns.G

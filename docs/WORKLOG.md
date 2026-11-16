@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.26 · 2026-11-15
+- splash: flavor descriptors beside the choices and an example line under them
+
 ## 0.57-alpha2.25 · 2026-11-15
 - splash: How do you speak? plate (chatty, raid pace, troll voice, switches, sounds)
 
