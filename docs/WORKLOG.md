@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.36 · 2026-11-15
+- Talkative / How social labels
+
 ## 0.57-alpha2.35 · 2026-11-15
 - Pace estimates only beside the dropdown
 

@@ -292,13 +292,13 @@ local function buildHome(parent)
     if tip then W.tooltip(label, text, tip) end
     return dd, label, h
   end
-  local chattyDD, _, chattyHint = speakRow(1, "How chatty", "", ns.chattyItems, function() return cdb().chatty end,
+  local chattyDD, _, chattyHint = speakRow(1, "Talkative", "", ns.chattyItems, function() return cdb().chatty end,
     function(v) cdb().chatty = v s:refreshChoices() end,
     "How many lines a minute to expect in a fight. These are rough: the real rate depends on how fast you press. In a party the shared party pace still applies.")
   s.chattyDD, s.chattyHint = chattyDD, chattyHint
-  local raidDD, _, raidHint = speakRow(2, "In a raid", "", ns.chattyItems, function() return cdb().raidChatty or 2 end,
+  local raidDD, _, raidHint = speakRow(2, "How social", "", ns.chattyItems, function() return cdb().raidChatty or 2 end,
     function(v) cdb().raidChatty = v s:refreshChoices() end,
-    "How chatty in a raid, with the same five levels. Raids are noisy already, so this starts at Quiet.")
+    "How talkative you are in a raid, with the same five levels. Raids are noisy already, so this starts at Quiet.")
   s.raidDD, s.raidHint = raidDD, raidHint
   s.askDD = speakRow(3, "Ask for help", "How often you call for aid", CR_LEVELS, function() return cdb().crAsk or 4 end,
     function(v) cdb().crAsk = v end,
