@@ -9,7 +9,7 @@ local ADDON, ns = ...
 ns = ns or {}
 local VERSION = "0.65"
 -- Display label. Public releases read "0.60-beta"; private working builds add a counter: "0.60-beta.1", ".2"...
-local BUILD = "0.65-beta"
+local BUILD = "0.65-beta.1"
 local BUILD_DATE = "2026-11-15"
 
 local unpack = unpack or table.unpack
@@ -251,6 +251,15 @@ local function refreshProfile()
   profile.spec = readSpec()
 end
 ns.refreshProfile = refreshProfile
+-- An Alliance character gets the LOK'TAR OGAR screen on its own, once a session. The game does not always know the faction
+-- right at login, so this is tried again as the world loads and a few seconds later; closing the screen keeps it closed.
+local allianceShown = false
+function ns.autoShowAlliance()
+  if allianceShown or not cdb or not cdb.alliance or cdb.alliance.disabled then return end
+  if not profile.faction then refreshProfile() end
+  if not ns.isAlliance() then return end
+  if ns.showAlliance and pcall(ns.showAlliance) then allianceShown = true end
+end
 
 -- The name to show for the character: first and last name from Total RP 3 when it is loaded and has them, otherwise
 -- the game's character name. Only displayed on the Setup page; never stored or sent.
@@ -1356,15 +1365,17 @@ ev:SetScript("OnEvent", function(_, event, a1, ...)
     -- skills and talents often aren't loaded yet at login: read again a little later
     if C_Timer and C_Timer.After then
       for _, secs in ipairs({4, 12}) do C_Timer.After(secs, function() refreshProfile() if ns.refreshUI then pcall(ns.refreshUI) end end) end
+      for _, secs in ipairs({1.5, 5, 13}) do C_Timer.After(secs, function() pcall(ns.autoShowAlliance) end) end
     end
     if ns.isAlliance() then
-      if ns.showAlliance and not cdb.alliance.disabled then pcall(ns.showAlliance) end
+      pcall(ns.autoShowAlliance)
       return
     end
     p(("cro_x %s loaded%s. Type /x to open."):format(BUILD, hookOK and "" or " — |cffff6666button hook FAILED|r"))
     -- the splash page (and, the first time, the setup walkthrough) open from UI.lua
   elseif event == "PLAYER_ENTERING_WORLD" then
     pcall(scanDebuffs, false)
+    pcall(ns.autoShowAlliance)
   elseif event == "UNIT_AURA" then
     if a1 == "player" then pcall(scanDebuffs, true) end
   elseif event == "PLAYER_REGEN_DISABLED" then

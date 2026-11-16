@@ -1203,3 +1203,22 @@ check("a nearby cro/x user who answers becomes a peer, answered once", r["peer"]
 check("a nearby peer's lines and yells hold mine, as a party's do", r["holds"] and r["yellHeld"], r)
 check("my lines are whispered to nearby peers", r["mineGoes"], r)
 check("the nearby switch turns it off, and peers expire", r["offNoPeers"] and r["offNoHello"] and r["expires"], r)
+
+# --- an Alliance character gets the screen on its own (0.65-beta.1)
+r = lua.eval('''function(ns, H)
+  local out = {}
+  H.me.faction = "Alliance"
+  ns.refreshProfile()
+  ns.cdb.alliance.disabled = false ns.cdb.on = true
+  CROX2AllianceFrame:Hide()
+  ns.autoShowAlliance()
+  out.opens = CROX2AllianceFrame:IsShown()
+  CROX2AllianceFrame:Hide()
+  H.fire("PLAYER_ENTERING_WORLD")
+  ns.autoShowAlliance()
+  out.staysClosed = not CROX2AllianceFrame:IsShown()
+  H.me.faction = "Horde" ns.refreshProfile()
+  return out
+end''')(ns, H)
+r = dict(r)
+check("an Alliance character gets the LOK'TAR OGAR screen on its own, once a session", r["opens"] and r["staysClosed"], r)

@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.65-beta.1 · 2026-11-15
+- Alliance characters get the LOK'TAR OGAR screen automatically at login
+
 ## 0.61-beta.4 · 2026-11-15
 - Pace with nearby cro/x users outside a group (silent addon whispers)
 
