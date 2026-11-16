@@ -53,18 +53,25 @@ local function cap(s) return s and (s:sub(1, 1):upper() .. s:sub(2)) or "" end
 -- The whole picture is always shown: it is fitted inside the frame at its own
 -- 4:3 shape (never cropped or stretched), and any spare room stays dark. The image sits in the top three
 -- quarters of a 1024 square texture. onSize(w, h) lets a screen resize its own parts when the frame changes.
+-- The Horde army poster behind the Setup page and the Alliance screen. The picture is portrait (about 3:4);
+-- it fills the frame and the overflow is cropped evenly at the sides or a little more from the bottom.
+local POSTER_ASPECT, POSTER_U = 1974 / 2576, 785 / 1024     -- width / height of the art, and how much of the texture it fills
 local function posterBG(f, onSize)
   local poster = f:CreateTexture(nil, "BACKGROUND", nil, -1)
-  poster:SetTexture("Interface\\AddOns\\CROX\\Art\\AllianceBG")
-  poster:SetTexCoord(0, 1, 0, 0.75)
+  poster:SetTexture("Interface\\AddOns\\CROX\\Art\\HordeBG")
+  poster:SetAllPoints()
   local function fit()
     local w, h = f:GetWidth(), f:GetHeight()
     if not w or not h or w < 1 or h < 1 then return end
-    local pw, ph = w, w * 0.75
-    if ph > h then pw, ph = h / 0.75, h end
-    poster:ClearAllPoints()
-    poster:SetPoint("CENTER")
-    poster:SetSize(pw, ph)
+    if w / h >= POSTER_ASPECT then
+      local vf = math.min(1, h * POSTER_ASPECT / w)         -- the part of the height that shows
+      local v0 = (1 - vf) * 0.35
+      poster:SetTexCoord(0, POSTER_U, v0, v0 + vf)
+    else
+      local uf = math.min(1, (w / h) / POSTER_ASPECT)       -- the part of the width that shows
+      local u0 = (1 - uf) / 2 * POSTER_U
+      poster:SetTexCoord(u0, u0 + uf * POSTER_U, 0, 1)
+    end
     if onSize then onSize(w, h) end
   end
   f:SetScript("OnSizeChanged", fit)

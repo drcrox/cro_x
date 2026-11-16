@@ -1,5 +1,8 @@
 # Working builds (private, not published)
 
+## 0.57-alpha2.33 · 2026-11-15
+- Horde army art as background, credited
+
 ## 0.57-alpha2.32 · 2026-11-15
 - Pull and kill baseline tiers
 

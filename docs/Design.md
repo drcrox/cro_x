@@ -241,3 +241,6 @@ Goal: make reporting a problem a ten-second job. Nothing is ever sent by the add
 - Designer's baseline answers: the pull sometimes, the kill sometimes, low health often, a new enemy / debuff / first big cooldown often.
 - Built as `SITUATION` + `TIER` in Core.lua (often 70%, sometimes 33%, rarely 10% at Normal pace; other paces scale it by 0.3 to 1.9). Applied to the opener (the pull) and the kill. Low health is already always (clutch is a big moment) and debuff call-outs only wait for the budget.
 - Not built (no clean signal yet): a new enemy joining, and first use of a big cooldown in a fight. Parked until alpha logs show whether they are needed.
+
+### New background art (2026-11-15, alpha2.33)
+- The Setup page and the Alliance screen now use the Horde army poster (official WoW art of the Horde marching from Orgrimmar) by **Veli Nyström**, signed 2018. The old Alliance poster file is gone. File: `CROX/Art/HordeBG.tga` (1024x1024, the portrait picture in the left 785 pixels). It fills the frame and crops the overflow (more from the bottom than the top). Credited in Credits.lua and shown in the Credits section. It is Blizzard's art, shown as a fan tribute and removable on request.
