@@ -9,7 +9,7 @@ Two kinds of build:
 
   Public release (a milestone; this is what Discord and GitHub show):
       python3 tools/bump_version.py release 0.58 "What changed" ["Another line" ...]
-    Sets the label to 0.58-alpha2 (the stage carries over; to change it use STAGE=beta1 in the environment),
+    Sets the label to 0.58-alpha2 (the stage carries over; to change it use STAGE=beta in the environment),
     and updates CROX/CROX.toc, the README, CHANGELOG.md and the tester checklist. Then merge dev into main and
     push; the release workflow publishes 0.58-alpha2 from CROX.toc (see .github/workflows/release.yml).
 """
@@ -35,7 +35,7 @@ def edit(rel, pattern, repl, count=1):
 
 def current_build():
     s = open(path("CROX/Core.lua"), encoding="utf-8").read()
-    m = re.search(r'(?m)^local BUILD = "(\d+\.\d+)-([a-z]+\d+)(?:\.(\d+))?"', s)
+    m = re.search(r'(?m)^local BUILD = "(\d+\.\d+)-([a-z]+\d*)(?:\.(\d+))?"', s)
     if not m:
         sys.exit("Could not read local BUILD in CROX/Core.lua")
     return m.group(1), m.group(2), int(m.group(3) or 0)

@@ -2,8 +2,8 @@
 
 Newest first. Each build number matches `## Version` in `CROX/CROX.toc`, the login line in game, and the release on GitHub.
 
-## 0.60-beta1
-- We are officially in beta: the stage label changes from alpha 2 to beta 1, and the version number stays 0.60. No code changes in this release.
+## 0.60-beta
+- We are officially in beta: the stage label is now just beta (0.60-beta), and the version number stays 0.60. No code changes since 0.60-alpha2.
 
 ## 0.60-alpha2
 - Setup page replaces the Character tab and splash: who you are, how you speak, and Character tags (tabs for race, class, temperament, homeland, origin, motivation, professions and spec, with a box on the ones your character has)
