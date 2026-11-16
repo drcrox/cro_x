@@ -1403,45 +1403,30 @@ local SPLASH_HINTS = {
 function ns.showSplash(onDone)
   if ns.isAlliance() then return end
   if not splash then
-    splash = W.make("Frame", UIParent, {"BackdropTemplate"}, "CROX2SplashFrame")
     local savedSize = ns.db and ns.db.splashSize
-    splash:SetSize(savedSize and savedSize[1] or 560, savedSize and savedSize[2] or 440)
+    -- the same window frame as the main window: its title bar, crest and close button
+    splash = W.panel("CROX2SplashFrame", "Combat Roleplay Options - cro/x", savedSize and savedSize[1] or 560, savedSize and savedSize[2] or 440)
+    splash:ClearAllPoints()
     splash:SetPoint("CENTER", 0, 40)
+    local crest = splash:CreateTexture(nil, "OVERLAY")
+    crest:SetTexture(W.HORDE_CREST)
+    crest:SetTexCoord(0, 0.62, 0, 0.62)
+    crest:SetSize(20, 20)
+    crest:SetPoint("TOPLEFT", 6, -2)
     splash:SetResizable(true)
-    splash:SetClampedToScreen(true)
     if splash.SetResizeBounds then splash:SetResizeBounds(540, 440, 1100, 860)
     elseif splash.SetMinResize then splash:SetMinResize(540, 440) splash:SetMaxResize(1100, 860) end
-    splash:SetFrameStrata("DIALOG")
-    splash:EnableMouse(true)
-    if splash.SetBackdrop then
-      splash:SetBackdrop({bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 32,
-        insets = {left = 11, right = 12, top = 12, bottom = 11}})
-    end
     local inner = CreateFrame("Frame", nil, splash)
-    inner:SetPoint("TOPLEFT", 12, -12)
-    inner:SetPoint("BOTTOMRIGHT", -12, 12)
+    inner:SetPoint("TOPLEFT", 8, -28)
+    inner:SetPoint("BOTTOMRIGHT", -8, 8)
     posterBG(inner)
     local dim = inner:CreateTexture(nil, "BACKGROUND", nil, 0)
     dim:SetAllPoints()
     dim:SetColorTexture(0, 0, 0, 0.3)
-    -- the same header the main window carries, so people know which addon this is
-    local bar = CreateFrame("Frame", nil, splash)
-    bar:SetPoint("TOPLEFT", 12, -12)
-    bar:SetPoint("TOPRIGHT", -12, -12)
-    bar:SetHeight(26)
-    local bt = bar:CreateTexture(nil, "BACKGROUND")
-    bt:SetAllPoints()
-    bt:SetColorTexture(0, 0, 0, 0.72)
-    local bl = bar:CreateTexture(nil, "ARTWORK")
-    bl:SetPoint("BOTTOMLEFT") bl:SetPoint("BOTTOMRIGHT") bl:SetHeight(1)
-    bl:SetColorTexture(1, 0.82, 0, 0.55)
-    local header = W.text(bar, "Combat Roleplay Options - cro/x", "GameFontNormal")
-    header:SetPoint("CENTER", 0, 0)
     -- the title card above the choices
     local card = CreateFrame("Frame", nil, splash)
-    card:SetPoint("TOPLEFT", 12, -42)
-    card:SetPoint("TOPRIGHT", -12, -42)
+    card:SetPoint("TOPLEFT", inner, "TOPLEFT", 0, -10)
+    card:SetPoint("TOPRIGHT", inner, "TOPRIGHT", 0, -10)
     card:SetHeight(54)
     local ct = card:CreateTexture(nil, "BACKGROUND")
     ct:SetAllPoints()
@@ -1468,7 +1453,7 @@ function ns.showSplash(onDone)
     local pt = plate:CreateTexture(nil, "BACKGROUND")
     pt:SetAllPoints()
     pt:SetColorTexture(0, 0, 0, 0.62)
-    local head = W.heading(plate, "Who is your character?")
+    local head = W.heading(plate, "Who are you?")
     head:SetPoint("TOPLEFT", 14, -10)
     splash.dds = {}
     for i, ch in ipairs(CHOICES) do
@@ -1527,7 +1512,6 @@ function ns.showSplash(onDone)
       if self.left <= 0 then self:Hide() end
     end)
     splash:SetScript("OnHide", function(self)
-      W.sound("close")
       if CloseDropDownMenus then pcall(CloseDropDownMenus) end
       if not cdb().setupDone then
         cdb().setupDone = true
@@ -1546,7 +1530,6 @@ function ns.showSplash(onDone)
   splash.onDone = onDone
   splash:Show()
   if UIFrameFadeIn then pcall(UIFrameFadeIn, splash, 0.6, 0, 1) end
-  W.sound("open")
 end
 -- /x setup and "Redo setup" bring the same page back
 function ns.openSetup() ns.showSplash() end
